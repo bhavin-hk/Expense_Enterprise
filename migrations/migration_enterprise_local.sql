@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS public.ent_expenses (
     category TEXT NOT NULL,
     taken_by UUID REFERENCES public.profiles(id),
     method TEXT,
+    bank_account_id UUID REFERENCES public.enterprise_bank_accounts(id),
     narrative TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -76,12 +77,26 @@ CREATE TABLE IF NOT EXISTS public.ent_investments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 8. Enable Row Level Security (Mimics Supabase)
+-- 8. Enterprise Bank Accounts (Current & CC/OD) — Local Only
+CREATE TABLE IF NOT EXISTS public.enterprise_bank_accounts (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) NOT NULL,
+    business_name TEXT NOT NULL,
+    bank_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    ifsc_code TEXT NOT NULL,
+    opening_balance NUMERIC(15,2) DEFAULT 0.00,
+    account_type TEXT CHECK (account_type IN ('Current', 'CC/OD')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 9. Enable Row Level Security (Mimics Supabase)
 ALTER TABLE public.ent_organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ent_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ent_revenue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ent_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ent_investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.enterprise_bank_accounts ENABLE ROW LEVEL SECURITY;
 
 -- 9. Basic RLS Policies (Local PG variant)
 CREATE POLICY "Users can view orgs they belong to" ON public.ent_organizations
@@ -120,3 +135,18 @@ BEGIN
     INSERT INTO public.ent_revenue (organization_id, amount, description) VALUES (org_id, 50000, 'Initial Funding');
     INSERT INTO public.ent_expenses (organization_id, amount, category, description) VALUES (org_id, 1200, 'Software', 'Server Costs');
 END $$;
+
+-- 11. Enterprise Credentials (Per-Business Authentication)
+CREATE TABLE IF NOT EXISTS public.enterprise_credentials (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) NOT NULL,
+    business_name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_verified BOOLEAN DEFAULT FALSE,
+    verification_token TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, business_name)
+);
+
+ALTER TABLE public.enterprise_credentials ENABLE ROW LEVEL SECURITY;

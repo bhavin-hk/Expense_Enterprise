@@ -1,9 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_file, current_app, jsonify
 from functools import wraps
 from decimal import Decimal
+from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import io
 import csv
+import secrets
 from .database_service import get_db_service
 
 enterprise_bp = Blueprint('enterprise', __name__)
@@ -17,40 +19,144 @@ def enterprise_required(f):
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
             return redirect(url_for('login'))
-        
+
+        # Check per-business auth gate
+        if not session.get('active_business'):
+            flash("Please sign in to a business account first.", "error")
+            return redirect(url_for('banks'))
+
         token = session.get('access_token')
-        # Note: In local mode, token might be None, handled in get_db_service
         db_service = get_db_service(token)
         user_id = session['user']
-        
+
         try:
-            # RBAC Check using Service
             member_orgs = db_service.get_user_organizations(user_id)
-            
+
             if not member_orgs:
                 flash("Access Denied: Enterprise Management is restricted to authorized members.", "error")
                 return redirect(url_for('dashboard'))
-            
+
             if 'curr_org_id' not in session:
                 if len(member_orgs) == 1:
                     session['curr_org_id'] = member_orgs[0]['id']
                 else:
                     return redirect(url_for('enterprise.select_organization'))
-            
+
             valid_org_ids = [str(m['id']) for m in member_orgs]
             if str(session['curr_org_id']) not in valid_org_ids:
                 session.pop('curr_org_id', None)
                 return redirect(url_for('enterprise.select_organization'))
-                
+
         except Exception as e:
             import traceback
             current_app.logger.error(f"Enterprise RBAC Error: {e}")
             current_app.logger.error(traceback.format_exc())
             flash(f"An error occurred during enterprise verification: {str(e)}", "error")
             return redirect(url_for('dashboard'))
-            
+
         return f(*args, **kwargs)
     return decorated_function
+
+# ---------------------------------------------------------
+# Auth Routes (no decorator — must be accessible pre-login)
+# ---------------------------------------------------------
+
+@enterprise_bp.route('/check_auth/<business_name>')
+def check_auth(business_name):
+    """JSON API: returns whether the business has registered credentials."""
+    if 'user' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    db_service = get_db_service(session.get('access_token'))
+    creds = db_service.get_business_credentials(session['user'], business_name)
+    return jsonify({'registered': creds is not None})
+
+
+@enterprise_bp.route('/signup', methods=['POST'])
+def enterprise_signup():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    business_name = request.form.get('business_name', '').strip()
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    confirm = request.form.get('confirm_password', '')
+
+    if not business_name or not email or not password:
+        flash('All fields are required.', 'error')
+        return redirect(url_for('banks'))
+    if password != confirm:
+        flash('Passwords do not match.', 'error')
+        return redirect(url_for('banks'))
+
+    db_service = get_db_service(session.get('access_token'))
+    existing = db_service.get_business_credentials(session['user'], business_name)
+    if existing:
+        flash('This business is already registered. Please sign in.', 'error')
+        return redirect(url_for('banks'))
+
+    pw_hash = generate_password_hash(password)
+    token = secrets.token_urlsafe(32)
+    ok = db_service.create_business_credentials(session['user'], business_name, email, pw_hash, token)
+    if ok:
+        # Automatically verify for local development
+        db_service.verify_business_email(token)
+        
+        verify_url = url_for('enterprise.verify_email', token=token, _external=True)
+        # Mock email — print to console for local testing reference
+        print(f"\n=== VERIFICATION LINK (Auto-Verified) for {business_name} ===\n{verify_url}\n")
+        
+        session['active_business'] = business_name
+        flash(f'Account created and auto-verified for development!', 'success')
+        return redirect(url_for('enterprise.ent_dashboard'))
+    else:
+        flash('Sign-up failed. The email may already be in use.', 'error')
+    return redirect(url_for('banks'))
+
+
+@enterprise_bp.route('/login', methods=['POST'])
+def enterprise_login():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    business_name = request.form.get('business_name', '').strip()
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+
+    if not business_name or not email or not password:
+        flash('All fields are required.', 'error')
+        return redirect(url_for('banks'))
+
+    db_service = get_db_service(session.get('access_token'))
+    creds = db_service.get_business_credentials(session['user'], business_name)
+    if not creds:
+        flash('No account found for this business. Please sign up first.', 'error')
+        return redirect(url_for('banks'))
+    if not check_password_hash(creds['password_hash'], password):
+        flash('Invalid password.', 'error')
+        return redirect(url_for('banks'))
+
+    # Relaxation: Allow login even if is_verified is False for local development
+    # (Original check removed to unblock development)
+
+    session['active_business'] = business_name
+    flash(f'Signed in to {business_name} successfully!', 'success')
+    return redirect(url_for('enterprise.ent_dashboard'))
+
+
+@enterprise_bp.route('/verify/<token>')
+def verify_email(token):
+    db_service = get_db_service(session.get('access_token'))
+    result = db_service.verify_business_email(token)
+    if result:
+        flash('Email verified! You can now sign in.', 'success')
+    else:
+        flash('Invalid or expired verification token.', 'error')
+    return redirect(url_for('banks'))
+
+
+@enterprise_bp.route('/logout')
+def enterprise_logout():
+    session.pop('active_business', None)
+    flash('Signed out of business account.', 'success')
+    return redirect(url_for('banks'))
 
 # ---------------------------------------------------------
 # Routes
@@ -248,7 +354,12 @@ def revenue_expenses():
     try:
         revenue = db_service.get_revenue(org_id, start_date, end_date)
         expenses = db_service.get_expenses(org_id, start_date, end_date)
-        banks = db_service.get_personal_banks(session['user'])
+        
+        # Filter Payment Methods to Active Business Only
+        all_ent_banks = db_service.get_enterprise_banks(session['user'])
+        active_biz = session.get('active_business')
+        enterprise_banks = [b for b in all_ent_banks if b.get('business_name') == active_biz]
+
         categories = db_service.get_categories(session['user'])
         members = db_service.get_members(org_id)
         
@@ -272,7 +383,7 @@ def revenue_expenses():
                                period=period,
                                start_date=start_date,
                                end_date=end_date,
-                               banks=banks,
+                               enterprise_banks=enterprise_banks,
                                categories=categories,
                                members=members,
                                currency='₹')

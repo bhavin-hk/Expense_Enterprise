@@ -52,6 +52,18 @@ class BaseService:
     def get_personal_banks(self, user_id: str) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
+    def get_enterprise_banks(self, user_id: str) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def add_enterprise_bank(self, user_id: str, data: Dict[str, Any]) -> bool:
+        raise NotImplementedError
+
+    def update_enterprise_bank(self, user_id: str, bank_id: str, data: Dict[str, Any]) -> bool:
+        raise NotImplementedError
+
+    def delete_enterprise_bank(self, user_id: str, bank_id: str) -> bool:
+        raise NotImplementedError
+
     def add_member(self, org_id: str, user_id: str, role: str = 'member') -> bool:
         raise NotImplementedError
 
@@ -59,6 +71,16 @@ class BaseService:
         raise NotImplementedError
 
     def get_categories(self, user_id: str) -> List[str]:
+        raise NotImplementedError
+
+    # Enterprise Credentials
+    def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def create_business_credentials(self, user_id: str, business_name: str, email: str, password_hash: str, token: str) -> bool:
+        raise NotImplementedError
+
+    def verify_business_email(self, token: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
 DEFAULT_CATEGORIES = [
@@ -140,7 +162,23 @@ class SupabaseService(BaseService):
             return False
 
     def get_personal_banks(self, user_id: str) -> List[Dict[str, Any]]:
-        return self.db.table('bank_accounts').select('id, bank_name').eq('user_id', user_id).execute().data or []
+        return self.db.table('bank_accounts').select('*').eq('user_id', user_id).execute().data or []
+
+    def get_enterprise_banks(self, user_id: str) -> List[Dict[str, Any]]:
+        # Enterprise banks are local-only; Supabase has no enterprise_bank_accounts table
+        return []
+
+    def add_enterprise_bank(self, user_id: str, data: Dict[str, Any]) -> bool:
+        # Enterprise banks are local-only
+        return False
+
+    def update_enterprise_bank(self, user_id: str, bank_id: str, data: Dict[str, Any]) -> bool:
+        # Enterprise banks are local-only
+        return False
+
+    def delete_enterprise_bank(self, user_id: str, bank_id: str) -> bool:
+        # Enterprise banks are local-only
+        return False
 
     def get_investments(self, org_id: str) -> List[Dict[str, Any]]:
         return self.db.table('ent_investments').select('*').eq('organization_id', org_id).execute().data or []
@@ -172,6 +210,16 @@ class SupabaseService(BaseService):
             return True
         except:
             return False
+
+    # Enterprise Credentials — dummy (local-only feature)
+    def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
+        return None
+
+    def create_business_credentials(self, user_id: str, business_name: str, email: str, password_hash: str, token: str) -> bool:
+        return False
+
+    def verify_business_email(self, token: str) -> Optional[Dict[str, Any]]:
+        return None
 
 class PostgresService(BaseService):
     _pool = None
@@ -392,16 +440,76 @@ class PostgresService(BaseService):
                     
                     if sb_user.data:
                         sb_uid = sb_user.data[0]['id']
-                        # 3. Fetch their REAL bank accounts
-                        res = self.sb.table('bank_accounts').select('id, bank_name').eq('user_id', sb_uid).execute()
+                        # 3. Fetch their REAL bank accounts (all columns for template)
+                        res = self.sb.table('bank_accounts').select('*').eq('user_id', sb_uid).execute()
                         if res.data:
                             return res.data
             except Exception as e:
                 print(f"Postgres-to-Supabase Bank Mapping Error: {e}")
         
         # Fallback to local database if email mapping fails
-        query = "SELECT id, bank_name FROM bank_accounts WHERE user_id = %s"
+        query = "SELECT * FROM bank_accounts WHERE user_id = %s"
         return self._execute_query(query, (user_id,))
+
+    def get_enterprise_banks(self, user_id: str) -> List[Dict[str, Any]]:
+        """Fetch enterprise (Current/CC/OD) accounts from local PostgreSQL."""
+        query = "SELECT * FROM enterprise_bank_accounts WHERE user_id = %s ORDER BY created_at DESC"
+        return self._execute_query(query, (user_id,))
+
+    def add_enterprise_bank(self, user_id: str, data: Dict[str, Any]) -> bool:
+        """Insert a new enterprise bank account into local PostgreSQL."""
+        try:
+            query = """
+                INSERT INTO enterprise_bank_accounts 
+                    (user_id, business_name, bank_name, account_number, ifsc_code, opening_balance, account_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            self._execute_query(query, (
+                user_id,
+                data.get('business_name'),
+                data.get('bank_name'),
+                data.get('account_number'),
+                data.get('ifsc_code'),
+                data.get('opening_balance', 0.00),
+                data.get('account_type', 'Current')
+            ), fetch=False)
+            return True
+        except Exception as e:
+            print(f"add_enterprise_bank error: {e}")
+            return False
+
+    def update_enterprise_bank(self, user_id: str, bank_id: str, data: Dict[str, Any]) -> bool:
+        """Update an existing enterprise bank account in local PostgreSQL."""
+        try:
+            query = """
+                UPDATE enterprise_bank_accounts 
+                SET business_name = %s, bank_name = %s, account_number = %s, ifsc_code = %s, opening_balance = %s, account_type = %s
+                WHERE id = %s AND user_id = %s
+            """
+            self._execute_query(query, (
+                data.get('business_name'),
+                data.get('bank_name'),
+                data.get('account_number'),
+                data.get('ifsc_code'),
+                data.get('opening_balance', 0.00),
+                data.get('account_type', 'Current'),
+                bank_id,
+                user_id
+            ), fetch=False)
+            return True
+        except Exception as e:
+            print(f"update_enterprise_bank error: {e}")
+            return False
+
+    def delete_enterprise_bank(self, user_id: str, bank_id: str) -> bool:
+        """Delete an enterprise bank account from local PostgreSQL."""
+        try:
+            query = "DELETE FROM enterprise_bank_accounts WHERE id = %s AND user_id = %s"
+            self._execute_query(query, (bank_id, user_id), fetch=False)
+            return True
+        except Exception as e:
+            print(f"delete_enterprise_bank error: {e}")
+            return False
 
     def get_categories(self, user_id: str) -> List[str]:
         # Try cloud categories via email mapping first
@@ -454,6 +562,46 @@ class PostgresService(BaseService):
             return True
         except:
             return False
+
+    # Enterprise Credentials
+    def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
+        """Check if a business already has registered credentials."""
+        try:
+            query = "SELECT * FROM enterprise_credentials WHERE user_id = %s AND business_name = %s"
+            res = self._execute_query(query, (user_id, business_name))
+            return res[0] if res else None
+        except Exception as e:
+            print(f"get_business_credentials error: {e}")
+            return None
+
+    def create_business_credentials(self, user_id: str, business_name: str, email: str, password_hash: str, token: str) -> bool:
+        """Insert new business credentials into local PostgreSQL."""
+        try:
+            query = """
+                INSERT INTO enterprise_credentials
+                    (user_id, business_name, email, password_hash, verification_token)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+            self._execute_query(query, (user_id, business_name, email, password_hash, token), fetch=False)
+            return True
+        except Exception as e:
+            print(f"create_business_credentials error: {e}")
+            return False
+
+    def verify_business_email(self, token: str) -> Optional[Dict[str, Any]]:
+        """Mark a business credential as verified via token."""
+        try:
+            query = """
+                UPDATE enterprise_credentials
+                SET is_verified = TRUE, verification_token = NULL
+                WHERE verification_token = %s
+                RETURNING *
+            """
+            res = self._execute_query(query, (token,))
+            return res[0] if res else None
+        except Exception as e:
+            print(f"verify_business_email error: {e}")
+            return None
 
 def get_db_service(token=None):
     """Factory function to get the correct database service."""

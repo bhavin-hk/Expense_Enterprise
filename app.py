@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+from werkzeug.exceptions import HTTPException
 from functools import wraps
 from decimal import Decimal
 from supabase import create_client, Client, ClientOptions
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 from flask_mail import Mail, Message
 from utils import generate_pdf_report, send_email_report
 from blueprints.enterprise import enterprise_bp
+from blueprints.database_service import get_db_service
 
 load_dotenv()
 
@@ -661,8 +663,15 @@ def banks():
     if 'user' not in session: return redirect(url_for('login'))
     try:
         token = session.get('access_token')
-        res = get_db(token).table('bank_accounts').select('*').eq('user_id', session['user']).execute()
-        banks = res.data
+        db_service = get_db_service(token)
+
+        # 1. Fetch Personal (Savings) Banks from Supabase
+        banks = db_service.get_personal_banks(session['user'])
+
+        # 2. Fetch Enterprise (Current/CC/OD) Banks from local PostgreSQL
+        enterprise_banks = db_service.get_enterprise_banks(session['user'])
+
+        # 3. Calculate running balance for personal banks
         tx_res = get_db(token).table('expenses').select('amount, type, bank_account_id').eq('user_id', session['user']).not_.is_('bank_account_id', 'null').execute()
         transactions = tx_res.data
         for bank in banks:
@@ -675,8 +684,8 @@ def banks():
             bank['current_balance'] = current_bal
     except Exception as e:
         flash(f"Error: {str(e)}", 'error')
-        banks = []
-    return render_template('banks.html', banks=banks)
+        banks, enterprise_banks = [], []
+    return render_template('banks.html', banks=banks, enterprise_banks=enterprise_banks)
 
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
@@ -1112,6 +1121,98 @@ def debts():
         lent_list, borrowed_list, banks, currency = [], [], [], '₹'
     return render_template('debts.html', lent_list=lent_list, borrowed_list=borrowed_list, banks=banks, currency=currency, today=datetime.date.today())
 
+
+# ---------------------------------------------------------
+# Enterprise Bank Account Routes
+# ---------------------------------------------------------
+
+@app.route('/add_enterprise_bank', methods=['POST'])
+def add_enterprise_bank():
+    if 'user' not in session: return redirect(url_for('login'))
+    try:
+        account_type = request.form.get('account_type', 'Current')
+        if account_type not in ('Current', 'CC/OD'):
+            flash('Invalid account type.', 'error')
+            return redirect(url_for('banks'))
+        data = {
+            'business_name': request.form.get('business_name'),
+            'bank_name': request.form.get('bank_name'),
+            'account_number': request.form.get('account_number'),
+            'ifsc_code': request.form.get('ifsc_code'),
+            'opening_balance': float(request.form.get('opening_balance', 0) or 0),
+            'account_type': account_type
+        }
+        db_service = get_db_service(session.get('access_token'))
+        if db_service.add_enterprise_bank(session['user'], data):
+            flash('Business account added!', 'success')
+        else:
+            flash('Failed to add business account. Check DB_BACKEND is set to local.', 'error')
+    except Exception as e:
+        flash(f"Error: {str(e)}", 'error')
+    return redirect(url_for('banks'))
+
+@app.route('/delete_enterprise_bank/<bank_id>')
+def delete_enterprise_bank(bank_id):
+    if 'user' not in session: return redirect(url_for('login'))
+    try:
+        db_service = get_db_service(session.get('access_token'))
+        if db_service.delete_enterprise_bank(session['user'], bank_id):
+            flash('Business account removed.', 'info')
+        else:
+            flash('Failed to remove account.', 'error')
+    except Exception as e:
+        flash(f"Error: {str(e)}", 'error')
+    return redirect(url_for('banks'))
+
+@app.route('/edit_enterprise_bank/<bank_id>', methods=['POST'])
+def edit_enterprise_bank(bank_id):
+    if 'user' not in session: return redirect(url_for('login'))
+    try:
+        account_type = request.form.get('account_type', 'Current')
+        if account_type not in ('Current', 'CC/OD'):
+            flash('Invalid account type.', 'error')
+            return redirect(url_for('banks'))
+        data = {
+            'business_name': request.form.get('business_name'),
+            'bank_name': request.form.get('bank_name'),
+            'account_number': request.form.get('account_number'),
+            'ifsc_code': request.form.get('ifsc_code'),
+            'opening_balance': float(request.form.get('opening_balance', 0) or 0),
+            'account_type': account_type
+        }
+        db_service = get_db_service(session.get('access_token'))
+        if db_service.update_enterprise_bank(session['user'], bank_id, data):
+            flash('Business account updated!', 'success')
+        else:
+            flash('Failed to update business account.', 'error')
+    except Exception as e:
+        flash(f"Error: {str(e)}", 'error')
+    return redirect(url_for('banks'))
+
+
+# ---------------------------------------------------------
+# Error Handlers
+# ---------------------------------------------------------
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP exceptions (404, 405, etc.) — let Flask handle them normally
+    if isinstance(e, HTTPException):
+        return e
+
+    # Check for specific Supabase JWT Expiry Error (PGRST303)
+    error_str = str(e)
+    if "JWT expired" in error_str or "PGRST303" in error_str:
+        print("CRITICAL: Caught Dead JWT. Forcing Logout.")
+        session.clear()
+        flash("Security token expired. Please login again.", "warning")
+        return redirect(url_for('login'))
+
+    # For all other real code errors, log them
+    print(f"Unhandled Server Error: {e}")
+    import traceback; traceback.print_exc()
+    if app.debug:
+        raise e
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
