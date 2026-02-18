@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Expense Reports</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="grid-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-top: 2rem;">
+    <!-- Pie Chart (Expenses) -->
+    <div class="card">
+        <h3>Expenses by Category</h3>
+        <canvas id="expenseCategoryChart"></canvas>
+    </div>
+
+    <!-- Pie Chart (Income) -->
+    <div class="card">
+        <h3>Income by Category</h3>
+        <canvas id="incomeCategoryChart"></canvas>
+    </div>
+    
+    <!-- Bar Chart -->
+    <div class="card" style="grid-column: 1 / -1;">
+        <h3>Monthly Activity (Income vs Expenses)</h3>
+        <canvas id="monthlyChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Expense Category Pie Chart
+    const ctxExpPie = document.getElementById('expenseCategoryChart').getContext('2d');
+    new Chart(ctxExpPie, {
+        type: 'pie',
+        data: {
+            labels: {{ exp_pie_labels | tojson }},
+            datasets: [{
+                data: {{ exp_pie_values | tojson }},
+                backgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#E7E9ED', '#71B37C'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Income Category Pie Chart
+    const ctxIncPie = document.getElementById('incomeCategoryChart').getContext('2d');
+    new Chart(ctxIncPie, {
+        type: 'pie',
+        data: {
+            labels: {{ inc_pie_labels | tojson }},
+            datasets: [{
+                data: {{ inc_pie_values | tojson }},
+                backgroundColor: [
+                    '#4BC0C0', '#36A2EB', '#FFCE56', '#9966FF', '#FF9F40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Monthly Bar Chart (Grouped)
+    const ctxBar = document.getElementById('monthlyChart').getContext('2d');
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: {{ bar_labels | tojson }},
+            datasets: [
+                {
+                    label: 'Income',
+                    data: {{ bar_inc | tojson }},
+                    backgroundColor: '#4BC0C0'
+                },
+                {
+                    label: 'Expenses',
+                    data: {{ bar_exp | tojson }},
+                    backgroundColor: '#FF6384'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+
+<style>
+    .card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    h3 { margin-top: 0; margin-bottom: 1rem; color: #333; }
+</style>
+{% endblock %}

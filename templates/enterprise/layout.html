@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+{% if 'user' in session %}
+{% include 'enterprise/sidebar.html' %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enterprise.css') }}">
+
+<div class="ent-dashboard">
+    <div class="ent-header">
+        <div class="ent-title-group">
+            <h1>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" style="width: 32px; height: 32px; color: var(--brand-start);">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 13.5h.75m-.75-3h.75m-.75-3h.75" />
+                </svg>
+                Enterprise Intelligence
+            </h1>
+            <p>Managing: <strong>{{ org_name }}</strong></p>
+        </div>
+        <div class="ent-actions">
+            <a href="{{ url_for('enterprise.select_organization') }}" class="btn-secondary">Switch Org</a>
+        </div>
+    </div>
+
+    <!-- Secondary Navigation Tabs -->
+    <div class="ent-sub-nav">
+        <a href="{{ url_for('enterprise.ent_dashboard') }}"
+            class="nav-tab {{ 'active' if request.endpoint == 'enterprise.ent_dashboard' else '' }}">📊 Dashboard</a>
+        <a href="{{ url_for('enterprise.revenue') }}"
+            class="nav-tab {{ 'active' if request.endpoint == 'enterprise.revenue' else '' }}">💰 Revenue</a>
+        <a href="{{ url_for('enterprise.expenses') }}"
+            class="nav-tab {{ 'active' if request.endpoint == 'enterprise.expenses' else '' }}">📉 Expenses</a>
+        <a href="{{ url_for('enterprise.members') }}"
+            class="nav-tab {{ 'active' if request.endpoint == 'enterprise.members' else '' }}">🤝 Members</a>
+        <a href="{{ url_for('enterprise.investments') }}"
+            class="nav-tab {{ 'active' if request.endpoint == 'enterprise.investments' else '' }}">💼 Investments</a>
+    </div>
+
+    <div class="ent-content">
+        {% block enterprise_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

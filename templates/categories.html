@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Manage Categories</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="grid-container" style="max-width: 800px;">
+    <!-- Add New Category -->
+    <div class="card">
+        <h3>Add New Category</h3>
+        <form action="{{ url_for('add_category') }}" method="POST" style="display: flex; gap: 1rem; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label for="name">Category Name</label>
+                <input type="text" id="name" name="name" placeholder="E.g. Gym, Projects" required>
+            </div>
+            <button type="submit" class="btn-primary" style="height: 50px;">Add</button>
+        </form>
+    </div>
+
+    <!-- Custom Categories List -->
+    <div class="card">
+        <h3>My Custom Categories</h3>
+        <div class="category-list">
+            {% for cat in custom_categories %}
+            <div class="category-item">
+                <span class="category-name">{{ cat.name }}</span>
+                <a href="{{ url_for('delete_category', cat_id=cat.id) }}" class="icon-btn delete" onclick="return confirm('Delete this category? Transactions will keep the name but might not filter correctly if deleted.')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                </a>
+            </div>
+            {% else %}
+            <p style="color: var(--text-secondary); font-style: italic;">No custom categories added yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Default Categories List (Read Only) -->
+    <div class="card">
+        <h3>Default Categories</h3>
+        <div class="category-tags">
+            {% for cat in default_categories %}
+            <span class="badge" style="font-size: 0.9rem; padding: 0.5rem 1rem;">{{ cat }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .category-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+    .category-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #F9FAFB;
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+    }
+    .category-name {
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    .icon-btn.delete {
+        color: #ef4444;
+        background: #fee2e2;
+        padding: 6px;
+        border-radius: 6px;
+        display: inline-flex;
+    }
+    .category-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+</style>
+{% endblock %}

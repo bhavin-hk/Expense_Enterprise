@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>{{ 'Edit Expense' if expense else 'Add New Expense' }}</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <div class="card-header">
+        <h2>{{ 'Edit Expense Details' if expense else 'New Expense Details' }}</h2>
+    </div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <!-- Transaction Type Toggle -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label style="display:block; margin-bottom: 0.5rem;">Type</label>
+                <div class="type-toggle">
+                    <input type="radio" id="type_expense" name="type" value="expense" {% if not expense or expense.type == 'expense' %}checked{% endif %}>
+                    <label for="type_expense" class="toggle-btn danger">Expense</label>
+                    
+                    <input type="radio" id="type_income" name="type" value="income" {% if expense and expense.type == 'income' %}checked{% endif %}>
+                    <label for="type_income" class="toggle-btn success">Income</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="date">Date</label>
+                <input type="date" id="date" name="date" value="{{ expense.date if expense else today }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="category">Category</label>
+                <select id="category" name="category" required>
+                    <option value="" disabled {% if not expense %}selected{% endif %}>Select Category</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat }}" {% if expense and expense.category == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="amount">Amount ({{ currency }})</label>
+                <input type="number" id="amount" name="amount" step="0.01" value="{{ expense.amount if expense else '' }}" placeholder="0.00" required>
+            </div>
+            
+            <!-- Bank Account Selection -->
+            <div class="form-group">
+                <label for="bank_account_id">Bank Account / Payment Mode</label>
+                <select id="bank_account_id" name="bank_account_id">
+                    <option value="">Cash / None</option>
+                    {% for bank in banks %}
+                        <option value="{{ bank.id }}" {% if expense and expense.bank_account_id == bank.id %}selected{% endif %}>{{ bank.bank_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description</label>
+                <input type="text" id="description" name="description" value="{{ expense.description if expense else '' }}" placeholder="Dinner, Salary, etc..." required>
+            </div>
+
+            <div class="form-group">
+                <label for="receipt_file">Receipt Photo (Optional)</label>
+                <input type="file" id="receipt_file" name="receipt_file" accept="image/*" class="form-control">
+            </div>
+            
+            {% if not expense %}
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="is_recurring" name="is_recurring">
+                <label for="is_recurring">Recurring (Monthly)</label>
+            </div>
+            {% endif %}
+            
+            <button type="submit" class="btn-primary" style="margin-top: 1.5rem;">{{ 'Update Transaction' if expense else 'Save Transaction' }}</button>
+        </form>
+
+        <style>
+            .type-toggle {
+                display: flex;
+                background: #F3F4F6;
+                padding: 4px;
+                border-radius: var(--radius-default);
+                gap: 4px;
+            }
+            .type-toggle input { display: none; }
+            .toggle-btn {
+                flex: 1;
+                text-align: center;
+                padding: 0.5rem;
+                border-radius: var(--radius-small);
+                cursor: pointer;
+                font-weight: 500;
+                transition: all 0.2s;
+                color: var(--text-secondary);
+            }
+            .type-toggle input:checked + .toggle-btn {
+                background: white;
+                box-shadow: var(--shadow-subtle);
+                color: var(--text-primary);
+                font-weight: 600;
+            }
+            /* Optional: Color coding active state */
+            .type-toggle input#type_expense:checked + .toggle-btn { color: var(--accent-danger); }
+            .type-toggle input#type_income:checked + .toggle-btn { color: var(--accent-success); }
+        </style>
+    </div>
+</div>
+
+<style>
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .checkbox-group input {
+        width: auto;
+    }
+</style>
+{% endblock %}

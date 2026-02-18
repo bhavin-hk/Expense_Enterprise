@@ -1,0 +1,41 @@
+{% extends "enterprise/layout.html" %}
+
+{% block enterprise_content %}
+<div class="ent-section">
+    <div class="section-header">
+        <h3>Revenue Streams</h3>
+        <button class="btn-primary" disabled>+ Add Revenue</button>
+    </div>
+    <div class="reports-table-wrapper">
+        <table class="reports-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Source</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in revenue_list %}
+                <tr>
+                    <td>{{ item.date }}</td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.source or 'Direct' }}</td>
+                    <td style="font-weight: 600;">{{ currency }}{{ "%.2f"|format(item.amount) }}</td>
+                    <td><span
+                            class="badge {% if item.status == 'paid' %}badge-success{% else %}badge-warning{% endif %}">{{
+                            item.status|capitalize }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-tertiary);">No revenue records found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

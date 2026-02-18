@@ -1,0 +1,182 @@
+{% extends "enterprise/layout.html" %}
+
+{% block enterprise_content %}
+<!-- Metric Grid -->
+<div class="ent-grid">
+    <!-- Revenue -->
+    <div class="kpi-card">
+        <div>
+            <div class="kpi-label">Total Revenue</div>
+            <div class="kpi-value">{{ currency }}{{ kpis.total_revenue }}</div>
+        </div>
+        <div class="kpi-status status-positive">↑ Standard Growth</div>
+    </div>
+
+    <!-- Expenses -->
+    <div class="kpi-card">
+        <div>
+            <div class="kpi-label">Total Expenses</div>
+            <div class="kpi-value">{{ currency }}{{ kpis.total_expenses }}</div>
+        </div>
+        <div class="kpi-status status-negative">↓ Operations Cost</div>
+    </div>
+
+    <!-- Net P/L -->
+    <div class="kpi-card">
+        <div>
+            <div class="kpi-label">Net Profit/Loss</div>
+            <div class="kpi-value {% if kpis.is_profit %}status-positive{% else %}status-negative{% endif %}">
+                {{ currency }}{{ kpis.net_pl }}
+            </div>
+        </div>
+        <div class="kpi-status {% if kpis.is_profit %}status-positive{% else %}status-negative{% endif %}">
+            {% if kpis.is_profit %}In Profit{% else %}In Deficit{% endif %}
+        </div>
+    </div>
+
+    <!-- Pending Payments -->
+    <div class="kpi-card" id="pending-payments-card">
+        <div>
+            <div class="kpi-label">Pending Payments</div>
+            <div class="kpi-value" id="pending-value">{{ currency }}{{ kpis.pending_payments }}</div>
+        </div>
+        <div class="kpi-status status-neutral">Real-time sync active</div>
+    </div>
+
+    <!-- Burn Rate -->
+    <div class="kpi-card">
+        <div>
+            <div class="kpi-label">Burn Rate (Avg 3M)</div>
+            <div class="kpi-value">{{ currency }}{{ kpis.burn_rate }}</div>
+        </div>
+        <div class="kpi-status status-neutral">Monthly Capital Outflow</div>
+    </div>
+
+    <!-- Margin % -->
+    <div class="kpi-card">
+        <div>
+            <div class="kpi-label">Profit Margin</div>
+            <div class="kpi-value">{{ kpis.margin_pct }}</div>
+        </div>
+        <div class="kpi-status {% if kpis.is_profit %}status-positive{% else %}status-negative{% endif %}">
+            Efficiency Ratio
+        </div>
+    </div>
+
+    <!-- Investments -->
+    <div class="kpi-card kpi-span-6">
+        <div>
+            <div class="kpi-label">Total Investments</div>
+            <div class="kpi-value">{{ currency }}{{ kpis.total_investments }}</div>
+        </div>
+        <div class="kpi-status status-positive">Strategic Capital</div>
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="span-12 ent-section">
+        <div class="section-header">
+            <h3>Revenue vs. Expense Trends</h3>
+            <div class="badge badge-success">Last 6 Months</div>
+        </div>
+        <div class="chart-container">
+            <canvas id="financeTrendChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Reports List -->
+    <div class="span-8 ent-section">
+        <div class="section-header">
+            <h3>Executive Financial Reports</h3>
+        </div>
+        <div class="reports-table-wrapper">
+            <table class="reports-table">
+                <thead>
+                    <tr>
+                        <th>Report Name</th>
+                        <th>Date Range</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Current Period Summary</td>
+                        <td>Latest Data</td>
+                        <td><span class="badge badge-success">Generated</span></td>
+                        <td><a href="{{ url_for('enterprise.export', format='csv') }}"
+                                style="color: var(--brand-start); font-weight: 600;">Download</a></td>
+                    </tr>
+                    <tr>
+                        <td>Quarterly Audit Report</td>
+                        <td>Q1 2026</td>
+                        <td><span class="badge badge-warning">Archived</span></td>
+                        <td><span style="color: var(--text-tertiary);">Request</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Action Stack -->
+    <div class="span-4 action-stack">
+        <div class="ent-section">
+            <h3>Export Options</h3>
+            <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                <a href="{{ url_for('enterprise.export', format='csv') }}" class="btn-secondary"
+                    style="justify-content: center;">Export CSV (Excel)</a>
+                <button class="btn-secondary" style="justify-content: center;" disabled>Generate PDF (Alpha)</button>
+            </div>
+        </div>
+        <div class="ent-section" style="background: var(--brand-gradient); color: white;">
+            <h3 style="color: white;">Insight AI</h3>
+            <p style="font-size: 0.875rem; opacity: 0.9; margin-top: 0.5rem;">Based on your current burn rate, we
+                recommend reviewing your 'Marketing' overhead for the next quarter.</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('financeTrendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ trend_labels | tojson }},
+        datasets: [
+        {
+            label: 'Revenue',
+            data: {{ rev_trend | tojson }},
+        borderColor: '#7C5CFC',
+        backgroundColor: 'rgba(124, 92, 252, 0.1)',
+        fill: true,
+        tension: 0.4
+                },
+        {
+            label: 'Expenses',
+            data: {{ exp_trend | tojson }},
+        borderColor: '#dc2626',
+        backgroundColor: 'transparent',
+        borderDash: [5, 5],
+        tension: 0.4
+                }
+    ]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top', align: 'end' }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: '#f3f4f6' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
+    }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pocket Expense Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="app-wrapper">
+    {% block sidebar %}
+    {% if 'user' in session %}
+    {% include 'sidebar.html' %}
+    {% endif %}
+    {% endblock %}
+
+    <div class="main-content">
+      <!-- Mobile Navigation Bar -->
+      <div class="mobile-nav">
+        <button id="mobile-sidebar-toggle" class="mobile-toggle-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+            stroke="currentColor" style="width: 24px; height: 24px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
+        <div class="mobile-logo">Pocket Expense</div>
+      </div>
+
+      <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flashes">
+          {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      // Sidebar Toggle Logic
+      const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+      const sidebar = document.getElementById('sidebar');
+
+      if (mobileToggle && sidebar) {
+        mobileToggle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          sidebar.classList.toggle('active');
+        });
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', function (e) {
+          if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
+            if (!sidebar.contains(e.target) && !mobileToggle.contains(e.target)) {
+              sidebar.classList.remove('active');
+            }
+          }
+        });
+      }
+
+      // Auto-dismiss flash messages
+      setTimeout(function () {
+        const flashes = document.querySelectorAll('.flash');
+        flashes.forEach(function (flash) {
+          flash.style.transition = 'opacity 0.5s ease-in-out';
+          flash.style.opacity = '0';
+          setTimeout(() => flash.remove(), 500);
+        });
+      }, 3000);
+    })();
+  </script>
+</body>
+
+</html>

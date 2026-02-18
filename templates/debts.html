@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Debt Management</h1>
+    <button onclick="document.getElementById('add-debt-modal').style.display='block'" class="btn-primary">+ Add
+        New</button>
+</div>
+
+<!-- Stats / Overview -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-title">Total I Owe (To Return)</span>
+        <span class="stat-value text-danger">{{ currency }}{{ lent_list | sum(attribute='amount') if false else
+            borrowed_list | sum(attribute='amount') }}</span>
+        <div class="stat-sub text-tertiary">{{ borrowed_list|length }} active debts</div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-title">Total Owed to Me (To Receive)</span>
+        <span class="stat-value text-success">{{ currency }}{{ lent_list | sum(attribute='amount') }}</span>
+        <div class="stat-sub text-tertiary">{{ lent_list|length }} active loans</div>
+    </div>
+</div>
+
+<div class="debts-split" style="margin-top: 2rem;">
+    <!-- Money I Lent -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-success">Money I Lent (To Receive)</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Person</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for debt in lent_list %}
+                    <tr>
+                        <td>{{ debt.transaction_date }}</td>
+                        <td>{{ debt.person_name }}</td>
+                        <td class="text-success">{{ currency }}{{ debt.amount }}</td>
+                        <td>
+                            <form action="{{ url_for('settle_debt', debt_id=debt.id) }}" method="POST"
+                                onsubmit="return confirm('Mark this debt as settled? Money will be added back to your selected account.');">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <select name="bank_account_id"
+                                        style="padding: 0.25rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.8rem; max-width: 100px;">
+                                        <option value="">Cash</option>
+                                        {% for bank in banks %}
+                                        <option value="{{ bank.id }}">{{ bank.bank_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn-outline btn-small">Settle</button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No active loans.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Money I Borrowed -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-danger">Money I Borrowed (To Return)</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Person</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for debt in borrowed_list %}
+                    <tr>
+                        <td>{{ debt.transaction_date }}</td>
+                        <td>{{ debt.person_name }}</td>
+                        <td class="text-danger">{{ currency }}{{ debt.amount }}</td>
+                        <td>
+                            <form action="{{ url_for('settle_debt', debt_id=debt.id) }}" method="POST"
+                                onsubmit="return confirm('Mark this debt as settled? Money will be deducted from your selected account.');">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <select name="bank_account_id"
+                                        style="padding: 0.25rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.8rem; max-width: 100px;">
+                                        <option value="">Cash</option>
+                                        {% for bank in banks %}
+                                        <option value="{{ bank.id }}">{{ bank.bank_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn-outline btn-small">Settle</button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No active debts.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Debt Modal -->
+<div id="add-debt-modal" class="modal">
+    <div class="modal-content">
+        <span onclick="document.getElementById('add-debt-modal').style.display='none'" class="close">&times;</span>
+        <h2>Add New Loan/Debt</h2>
+        <form action="{{ url_for('debts') }}" method="POST">
+            <div class="form-group">
+                <label>Type</label>
+                <div class="type-toggle">
+                    <input type="radio" id="type_lend" name="type" value="lend" checked>
+                    <label for="type_lend" class="toggle-btn success">I Lent (Receive)</label>
+
+                    <input type="radio" id="type_borrow" name="type" value="borrow">
+                    <label for="type_borrow" class="toggle-btn danger">I Borrowed (Pay)</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Person Name</label>
+                <input type="text" name="person_name" placeholder="John Doe" required>
+            </div>
+
+            <div class="form-group">
+                <label>Amount ({{ currency }})</label>
+                <input type="number" name="amount" step="0.01" required>
+            </div>
+
+            <div class="form-group">
+                <label>Transaction Date</label>
+                <input type="date" name="transaction_date" value="{{ today }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>Description (Optional)</label>
+                <input type="text" name="description" placeholder="e.g., Loan for business, Emergency help, etc.">
+            </div>
+
+            <div class="form-group">
+                <label>Related Bank Account</label>
+                <select name="bank_account_id">
+                    <option value="">Cash / None</option>
+                    {% for bank in banks %}
+                    <option value="{{ bank.id }}">{{ bank.bank_name }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Balance will be updated automatically.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Due Date (Optional)</label>
+                <input type="date" name="due_date">
+            </div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Save Record</button>
+        </form>
+    </div>
+</div>
+
+<style>
+    .type-toggle {
+        display: flex;
+        background: #F3F4F6;
+        padding: 4px;
+        border-radius: var(--radius-default);
+        gap: 4px;
+    }
+
+    .type-toggle input {
+        display: none;
+    }
+
+    .toggle-btn {
+        flex: 1;
+        text-align: center;
+        padding: 0.5rem;
+        border-radius: var(--radius-small);
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+        color: var(--text-secondary);
+    }
+
+    .type-toggle input:checked+.toggle-btn {
+        background: white;
+        box-shadow: var(--shadow-subtle);
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .type-toggle input#type_lend:checked+.toggle-btn {
+        color: var(--accent-success);
+    }
+
+    .type-toggle input#type_borrow:checked+.toggle-btn {
+        color: var(--accent-danger);
+    }
+
+    .btn-small {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .debts-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 1024px) {
+        .debts-split {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+    window.onclick = function (event) {
+        if (event.target.className === 'modal') {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+{% endblock %}

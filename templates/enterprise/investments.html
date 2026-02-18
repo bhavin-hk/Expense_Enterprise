@@ -1,0 +1,40 @@
+{% extends "enterprise/layout.html" %}
+
+{% block enterprise_content %}
+<div class="ent-section">
+    <div class="section-header">
+        <h3>Capital Investments</h3>
+        <button class="btn-primary" disabled>+ New Investment</button>
+    </div>
+    <div class="reports-table-wrapper">
+        <table class="reports-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Source / Investor</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in investments_list %}
+                <tr>
+                    <td>{{ item.date }}</td>
+                    <td style="font-weight: 600;">{{ item.source or 'Equity' }}</td>
+                    <td>{{ item.type|capitalize or 'Seed' }}</td>
+                    <td style="font-weight: 600; color: var(--brand-start);">{{ currency }}{{ "%.2f"|format(item.amount)
+                        }}</td>
+                    <td><span class="badge badge-success">Committed</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-tertiary);">No investment records
+                        found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

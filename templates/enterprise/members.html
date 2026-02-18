@@ -1,0 +1,68 @@
+{% extends "enterprise/layout.html" %}
+
+{% block enterprise_content %}
+<div class="ent-section">
+    <div class="section-header">
+        <h3>Team Members</h3>
+        <button class="btn-primary" onclick="document.getElementById('add-member-modal').style.display='flex'">+ Add
+            Member</button>
+    </div>
+    <div class="reports-table-wrapper">
+        <table class="reports-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in members_list %}
+                <tr>
+                    <td style="font-weight: 600;">{{ item.profiles.full_name or 'N/A' }}</td>
+                    <td>{{ item.profiles.email }}</td>
+                    <td><span class="badge" style="background: #eef2ff; color: #4338ca;">{{ item.role|capitalize
+                            }}</span></td>
+                    <td><span class="badge badge-success">Active</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-tertiary);">No members found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Placeholder -->
+<div id="add-member-modal"
+    style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; justify-content:center; align-items:center; padding: 1rem;">
+    <div class="auth-card" style="width: 100%; max-width: 400px; margin: 0;">
+        <h2>Add Team Member</h2>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.5rem;">New members must have an
+            existing account in the application.</p>
+        <form method="POST" action="{{ url_for('enterprise.members') }}">
+            <div class="form-group">
+                <label>User Email</label>
+                <input type="email" name="email" placeholder="colleague@company.com" required>
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select name="role" required
+                    style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-default);">
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                    <option value="viewer">Viewer</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn-secondary" style="flex:1"
+                    onclick="document.getElementById('add-member-modal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn-primary" style="flex:1">Add Member</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

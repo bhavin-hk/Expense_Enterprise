@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="auth-wrapper" style="min-height: 80vh;">
+    <div class="auth-card">
+        <h1>Select Organization</h1>
+        <p>Please choose an organization to manage.</p>
+
+        <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            {% for org in organizations %}
+            <a href="{{ url_for('enterprise.switch_organization', org_id=org.id) }}" class="btn-outline"
+                style="justify-content: space-between; padding: 1.25rem; display: flex; text-decoration: none; align-items: center; border-radius: var(--radius-default);">
+                <span style="font-weight: 600; color: var(--text-primary);">{{ org.name }}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" style="width: 20px; height: 20px; color: var(--brand-start);">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+            </a>
+            {% endfor %}
+        </div>
+
+        <p style="margin-top: 2rem; text-align: center; color: var(--text-secondary);">
+            <a href="{{ url_for('dashboard') }}" style="color: var(--text-tertiary); text-decoration: none;">Back to
+                Personal Dashboard</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

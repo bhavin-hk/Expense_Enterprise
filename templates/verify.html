@@ -1,0 +1,63 @@
+{% extends "base.html" %} {% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <h1>Verify OTP</h1>
+    <p>We sent a code to {{ email }}.</p>
+    <form action="{{ url_for('verify') }}" method="POST">
+      <input type="hidden" name="email" value="{{ email }}" />
+      <div class="form-group">
+        <label for="otp">Enter OTP</label>
+        <input type="text" id="otp" name="otp" placeholder="123456" required />
+      </div>
+      <button type="submit" class="btn-primary">Verify & Login</button>
+    </form>
+    <script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        const hash = window.location.hash;
+        if (hash && hash.includes('access_token')) {
+          // Extract access_token from hash
+          const params = new URLSearchParams(hash.substring(1));
+          const accessToken = params.get('access_token');
+          
+          if (accessToken) {
+            // Show loading state
+            document.querySelector('h1').textContent = 'Logging you in...';
+            document.querySelector('.auth-card p').textContent = 'Please wait while we verify your session.';
+            document.querySelector('form').style.display = 'none';
+            
+            try {
+              const response = await fetch('/auth/magic_login', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ access_token: accessToken }),
+              });
+              
+              if (!response.ok) {
+                  const text = await response.text();
+                  alert(`Login Error ${response.status}: ${text}`);
+                  document.querySelector('form').style.display = 'block';
+                  return;
+              }
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                window.location.href = result.redirect_url;
+              } else {
+                alert('Login failed: ' + result.error);
+                document.querySelector('form').style.display = 'block';
+              }
+            } catch (error) {
+              console.error('Error:', error);
+              alert('An error occurred during login: ' + error.message);
+              document.querySelector('form').style.display = 'block';
+            }
+          }
+        }
+      });
+    </script>
+  </div>
+</div>
+{% endblock %}

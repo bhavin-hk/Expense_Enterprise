@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div class="header-content">
+        <h1>Expenses</h1>
+        <div class="header-actions">
+
+            <a href="{{ url_for('export_pdf_route', **dict(request.args)) }}" class="btn-outline">Download PDF</a>
+            <button onclick="openEmailModal()" class="btn-outline">Email Report</button>
+            <a href="{{ url_for('bulk_add') }}" class="btn-secondary"
+                style="margin-right: 0.5rem; display: inline-flex; justify-content: center; align-items: center; text-decoration: none;">+
+                Bulk Add</a>
+            <a href="{{ url_for('add_expense') }}" class="btn-primary">+ Add New</a>
+        </div>
+    </div>
+</div>
+
+<form method="GET" action="{{ url_for('expenses') }}" class="filter-bar" id="main-filter-form">
+    <div class="floating-group">
+        <input type="date" id="start_date" name="start_date" value="{{ request.args.get('start_date', '') }}"
+            placeholder=" ">
+        <label for="start_date">From Date</label>
+    </div>
+    <div class="floating-group">
+        <input type="date" id="end_date" name="end_date" value="{{ request.args.get('end_date', '') }}" placeholder=" ">
+        <label for="end_date">To Date</label>
+    </div>
+    <div class="floating-group">
+        <select id="filter_category" name="category">
+            <option value="" selected disabled></option> <!-- Needed for :valid selector trick -->
+            <option value="All">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if request.args.get('category')==cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+        </select>
+        <label for="filter_category">Category</label>
+    </div>
+    <div class="floating-group">
+        <select id="filter_bank" name="bank_id">
+            <option value="" selected disabled></option>
+            <option value="All">All Accounts</option>
+            <option value="Cash" {% if request.args.get('bank_id')=='Cash' %}selected{% endif %}>Cash</option>
+            {% for bank in banks %}
+            <option value="{{ bank.id }}" {% if request.args.get('bank_id')==bank.id %}selected{% endif %}>{{
+                bank.bank_name }}</option>
+            {% endfor %}
+        </select>
+        <label for="filter_bank">Bank Account</label>
+    </div>
+    <button type="submit" class="btn-primary" style="padding: 0.8rem 2rem; height: 50px; border-radius: 99px;">Apply
+        Filter</button>
+    {% if request.args.get('start_date') or request.args.get('end_date') or request.args.get('category') or
+    request.args.get('bank_id') %}
+    <a href="{{ url_for('expenses') }}" class="btn-text" style="align-self: center; margin: 0; padding: 0;">Clear</a>
+    {% endif %}
+</form>
+
+<div class="card" style="border: none; box-shadow: none; background: transparent;"> <!-- Container for Table -->
+    <div class="table-responsive">
+        <table class="styled-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Recurring</th>
+                    <th>Account</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Receipt</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in expenses %}
+                <!-- Assuming expense object has styling or simple logic. All basic expenses red for now. -->
+                <tr>
+                    <td style="font-weight: 500;">{{ expense.date | format_date }}</td>
+                    <td><span class="badge">{{ expense.category }}</span></td>
+                    <td>
+                        {% if expense.recurring_rule_id %}
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <span style="color: var(--brand-start);" title="Active Recurring">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+                                    style="width: 18px; height: 18px;">
+                                    <path fill-rule="evenodd"
+                                        d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </span>
+                            <a href="{{ url_for('delete_recurring', recurring_id=expense.recurring_rule_id) }}"
+                                class="icon-btn delete" title="Stop Recurring"
+                                onclick="return confirm('Stop this recurring expense? Future auto-entries will be cancelled.')"
+                                style="padding: 2px 6px; font-size: 0.7em; height: auto;">
+                                Stop
+                            </a>
+                        </div>
+                        {% else %}
+                        <span style="color: var(--text-tertiary);">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.85rem; color: var(--text-secondary);">
+                        {% if expense.bank_accounts %}
+                        {{ expense.bank_accounts.bank_name }}
+                        {% else %}
+                        Cash
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--text-secondary);">{{ expense.description }}</td>
+                    <td>
+                        <span class="amount-badge {{ 'income' if expense.type == 'income' else 'expense' }}">
+                            {{ '+' if expense.type == 'income' else '-' }}{{ currency }}{{ expense.amount }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if expense.receipt_url %}
+                        <a href="{{ expense.receipt_url }}" target="_blank" style="color: var(--brand-start);"
+                            title="View Receipt">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" style="width: 20px; height: 20px;">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                            </svg>
+                        </a>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        {% if expense.category != 'Debt' and expense.category != 'Debt Repayment' %}
+                        <a href="{{ url_for('edit_expense', expense_id=expense.id) }}" class="action-btn" title="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                            </svg>
+                        </a>
+                        <a href="{{ url_for('delete_expense', expense_id=expense.id) }}" class="action-btn delete"
+                            title="Delete" onclick="return confirm('Delete this expense?')">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                        </a>
+                        {% else %}
+                        <span class="text-muted" style="font-size: 0.85rem;">Manage in Debts</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="empty-icon">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                            </svg>
+                            <h3 class="empty-title">No expenses yet</h3>
+                            <p class="empty-text">Start tracking your spending to see your analytics.</p>
+                            <a href="{{ url_for('add_expense') }}" class="btn-primary">
+                                + Add First Expense
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Email Modal -->
+<div id="email-modal" class="modal">
+    <div class="modal-content">
+        <span onclick="document.getElementById('email-modal').style.display='none'" class="close">&times;</span>
+        <h2>Email Report</h2>
+        <form action="{{ url_for('email_report_route') }}" method="POST" id="email-form">
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" placeholder="Enter email" required>
+            </div>
+            <!-- Hidden inputs to pass filters -->
+            <input type="hidden" name="start_date" id="email_start_date"
+                value="{{ request.args.get('start_date', '') }}">
+            <input type="hidden" name="end_date" id="email_end_date" value="{{ request.args.get('end_date', '') }}">
+            <input type="hidden" name="category" id="email_category" value="{{ request.args.get('category', '') }}">
+            <input type="hidden" name="bank_id" id="email_bank_id" value="{{ request.args.get('bank_id', '') }}">
+
+            <button type="submit" class="btn-primary">Send</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const emailModal = document.getElementById('email-modal');
+
+    function openEmailModal() {
+        emailModal.style.display = "block";
+    }
+
+    window.onclick = function (event) {
+        if (event.target === emailModal) {
+            emailModal.style.display = "none";
+        }
+    }
+</script>
+{% endblock %}

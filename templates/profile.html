@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-header">
+    <h1>My Profile</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+<div class="card profile-card" style="max-width: 700px; margin: 0 auto;">
+    <div class="card-body">
+        <form action="{{ url_for('profile') }}" method="POST" enctype="multipart/form-data">
+            <!-- Profile Header with Avatar -->
+            <div class="profile-header-section">
+                <div class="avatar-container">
+                    {% if profile.get('avatar_url') %}
+                    <img src="{{ profile.get('avatar_url') }}" alt="Avatar" class="profile-avatar">
+                    {% else %}
+                    <div class="profile-avatar-placeholder">{{ profile.get('full_name', 'U')[0] | upper }}</div>
+                    {% endif %}
+                </div>
+                <div class="profile-identity">
+                    <h2 style="margin: 0; font-size: 1.5rem;">{{ profile.get('full_name', 'User') }}</h2>
+                    <p style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">{{ email }}</p>
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 2rem 0;">
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" value="{{ profile.get('username', '') }}"
+                    placeholder="johndoe" required>
+            </div>
+
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <input type="text" id="full_name" name="full_name" value="{{ profile.get('full_name', '') }}"
+                    placeholder="Your Name" required>
+            </div>
+
+            <div class="form-group">
+                <label>Avatar</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="button" class="btn-secondary"
+                        onclick="document.getElementById('avatar_file').click()">Add Photo</button>
+                    <span id="file-name" style="color: var(--text-secondary); font-size: 0.9rem;"></span>
+                </div>
+                <!-- Hidden File Input -->
+                <input type="file" id="avatar_file" name="avatar_file" accept="image/*" style="display: none;"
+                    onchange="showFileName(this)">
+
+                <!-- Hidden Avatar URL to preserve value -->
+                <input type="hidden" id="avatar_url" name="avatar_url" value="{{ profile.get('avatar_url', '') }}">
+            </div>
+
+            <script>
+                function showFileName(input) {
+                    if (input.files && input.files[0]) {
+                        document.getElementById('file-name').textContent = input.files[0].name;
+                    }
+                }
+            </script>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="budget">Monthly Budget</label>
+                    <input type="number" id="budget" name="budget" value="{{ profile.get('budget', 0) }}" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="currency">Currency Symbol</label>
+                    <select id="currency" name="currency">
+                        <option value="₹" {% if profile.get('currency')=='₹' %}selected{% endif %}>₹ (INR)</option>
+                        <option value="$" {% if profile.get('currency')=='$' %}selected{% endif %}>$ (USD)</option>
+                        <option value="€" {% if profile.get('currency')=='€' %}selected{% endif %}>€ (EUR)</option>
+                        <option value="£" {% if profile.get('currency')=='£' %}selected{% endif %}>£ (GBP)</option>
+                        <option value="¥" {% if profile.get('currency')=='¥' %}selected{% endif %}>¥ (JPY)</option>
+                        <option value="AED" {% if profile.get('currency')=='AED' %}selected{% endif %}>AED</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 2rem;">
+                <button type="submit" class="btn-primary" style="padding: 0.75rem 2rem;">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
+<div class="card" style="max-width: 700px; margin: 2rem auto;">
+    <div class="card-body">
+        <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--text-primary);">Change Password</h3>
+        <form action="{{ url_for('change_password') }}" method="POST">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="new_password">New Password</label>
+                    <input type="password" id="new_password" name="new_password" placeholder="••••••••" required
+                        minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirm_password">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="••••••••" required
+                        minlength="6">
+                </div>
+            </div>
+            <div style="text-align: right; margin-top: 1rem;">
+                <button type="submit" class="btn-primary" style="background: var(--brand-end);">Update Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="max-width: 700px; margin: 2rem auto;">
+    <div class="card-body" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Custom Categories</h3>
+            <p style="margin: 0.2rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">Create and manage your own
+                expense categories.</p>
+        </div>
+        <a href="{{ url_for('categories') }}" class="btn-secondary">Manage Categories</a>
+    </div>
+</div>
+
+<style>
+    .profile-header-section {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .profile-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--border-color);
+    }
+
+    .profile-avatar-placeholder {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--brand-start);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 600px) {
+        .grid-2 {
+            grid-template-columns: 1fr;
+        }
+
+        .profile-header-section {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+</style>
+{% endblock %}

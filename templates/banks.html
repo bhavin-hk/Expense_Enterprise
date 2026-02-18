@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div class="header-content">
+        <h1>Bank Accounts</h1>
+        <div class="header-actions">
+        <button onclick="openAddModal()" class="btn-primary">+ Add New Account</button>
+    </div>
+</div>
+</div>
+
+<div class="dashboard-section card">
+    <div class="bank-grid">
+        {% for bank in banks %}
+<div class="bank-card">
+            <!-- Header -->
+            <div class="bank-card-header">
+                <div class="bank-identity">
+                    <div class="bank-icon-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                    </div>
+                    <div class="bank-title-group">
+                        <h3>{{ bank.bank_name }}</h3>
+                        <div class="bank-sublink" onclick='openEditModal({{ bank | tojson }})'>Edit Details</div>
+                    </div>
+                </div>
+                
+                <div class="card-actions">
+                     <!-- Top-right delete action for quick access -->
+                     <a href="{{ url_for('delete_bank', bank_id=bank.id) }}" class="btn-icon-only delete" onclick="return confirm('Remove this bank account?')" title="Remove">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                     </a>
+                </div>
+            </div>
+
+            <!-- Body: Details -->
+            <div class="bank-card-body">
+                <div class="detail-item">
+                    <span class="detail-label">Account Num</span>
+                    <span class="detail-value">{{ bank.account_number }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">IFSC Code</span>
+                    <span class="detail-value">{{ bank.ifsc_code }}</span>
+                </div>
+            </div>
+
+            <!-- Footer: Balance -->
+            <div class="bank-card-footer">
+                <div class="balance-group">
+                    <span class="balance-label">Opening Balance</span>
+                    <span class="balance-amount">{{ "%.2f"|format(bank.opening_balance) }}</span>
+                </div>
+                <div class="balance-group" style="text-align: right;">
+                    <span class="balance-label">Current Balance</span>
+                    <span class="balance-amount" style="color: var(--brand-start);">{{ "%.2f"|format(bank.current_balance) }}</span>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <p>No bank accounts added yet.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Add/Edit Bank Modal -->
+<div id="bank-modal" class="modal">
+    <div class="modal-content">
+        <span onclick="closeModal()" class="close">&times;</span>
+        <h2 id="modal-title">Add Bank Account</h2>
+        <form id="bank-form" action="{{ url_for('add_bank') }}" method="POST">
+            <div class="form-group">
+                <label>Bank Name</label>
+                <input type="text" id="bank_name" name="bank_name" placeholder="e.g. HDFC Bank" required>
+            </div>
+            <div class="form-group">
+                <label>Account Number</label>
+                <input type="text" id="account_number" name="account_number" placeholder="XXXX-XXXX-XXXX" required>
+            </div>
+            <div class="form-group">
+                <label>IFSC Code</label>
+                <input type="text" id="ifsc_code" name="ifsc_code" placeholder="HDFC0001234" required>
+            </div>
+            <div class="form-group">
+                <label>Opening Balance</label>
+                <input type="number" id="opening_balance" name="opening_balance" placeholder="0.00" step="0.01" value="0">
+            </div>
+            <button type="submit" id="modal-submit-btn" class="btn-primary">Add Account</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const modal = document.getElementById('bank-modal');
+    const form = document.getElementById('bank-form');
+    const title = document.getElementById('modal-title');
+    const submitBtn = document.getElementById('modal-submit-btn');
+
+    function openAddModal() {
+        modal.style.display = "block";
+        title.innerText = "Add Bank Account";
+        submitBtn.innerText = "Add Account";
+        form.action = "{{ url_for('add_bank') }}";
+        form.reset();
+        document.getElementById('opening_balance').value = "0";
+    }
+
+    function openEditModal(bank) {
+        modal.style.display = "block";
+        title.innerText = "Edit Bank Account";
+        submitBtn.innerText = "Update Account";
+        form.action = "/edit_bank/" + bank.id;
+        
+        document.getElementById('bank_name').value = bank.bank_name;
+        document.getElementById('account_number').value = bank.account_number;
+        document.getElementById('ifsc_code').value = bank.ifsc_code;
+        document.getElementById('opening_balance').value = bank.opening_balance || 0;
+    }
+
+    function closeModal() {
+        modal.style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target === modal) {
+            closeModal();
+        }
+    }
+</script>
+{% endblock %}

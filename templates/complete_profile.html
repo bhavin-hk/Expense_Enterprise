@@ -1,0 +1,19 @@
+{% extends "base.html" %} {% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h1>Complete Your Profile</h1>
+        <p>Please set a username and password to secure your account.</p>
+        <form action="{{ url_for('complete_profile') }}" method="POST">
+            <div class="form-group">
+                <label for="username">Choose a Username</label>
+                <input type="text" id="username" name="username" placeholder="johndoe" required />
+            </div>
+            <div class="form-group">
+                <label for="password">Set a Password</label>
+                <input type="password" id="password" name="password" placeholder="••••••••" required minlength="6" />
+            </div>
+            <button type="submit" class="btn-primary">Finish Setup</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

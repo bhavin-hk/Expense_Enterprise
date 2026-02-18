@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Recurring Expenses</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="card" style="border: none; box-shadow: none; background: transparent;">
+    <div class="table-responsive">
+        <table class="styled-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Next Due</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recurring %}
+                <tr>
+                    <td style="font-weight: 500;">{{ item.description }}</td>
+                    <td><span class="badge">{{ item.category }}</span></td>
+                    <td>
+                        <span class="amount-badge expense">
+                            -{{ currency }}{{ "%.2f"|format(item.amount) }}
+                        </span>
+                    </td>
+                    <td>{{ item.next_due_date | format_date }}</td>
+                    <td style="text-align: right;">
+                        <a href="{{ url_for('delete_recurring', recurring_id=item.id) }}" class="action-btn delete" title="Stop Recurring" onclick="return confirm('Stop this recurring expense? Future auto-entries will be cancelled.')">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9zM15.75 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M12 12v3" /> 
+                            </svg>
+                            <span style="margin-left:5px; font-size: 0.9em;">Stop</span>
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <h3 class="empty-title">No recurring expenses</h3>
+                            <p class="empty-text">Add a new expense and check "Recurring" to see it here.</p>
+                            <a href="{{ url_for('add_expense') }}" class="btn-primary">
+                                + Add New
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

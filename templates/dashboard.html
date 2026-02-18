@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div class="header-content">
+        <h1>Dashboard Overview</h1>
+        <p class="text-muted">Welcome back, {{ profile.get('full_name', 'User') }}</p>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-grid">
+    <!-- Total Balance -->
+    <div class="stat-card">
+        <span class="stat-title">Current Balance</span>
+        <span class="stat-value" style="color: var(--brand-start);">{{ currency }}{{ current_balance | round(2)
+            }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">Available</div>
+    </div>
+
+    <!-- Debt Stats -->
+    <div class="stat-card">
+        <span class="stat-title">To Receive</span>
+        <span class="stat-value text-success">{{ currency }}{{ total_lent | round(2) }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">Money Lent</div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-title">To Return</span>
+        <span class="stat-value text-danger">{{ currency }}{{ total_borrowed | round(2) }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">Money Borrowed</div>
+    </div>
+
+    <!-- Total Spent -->
+    <div class="stat-card">
+        <span class="stat-title">Total Spent</span>
+        <span class="stat-value">{{ currency }}{{ total | round(2) }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">This Month</div>
+    </div>
+
+    <!-- Total Income -->
+    <div class="stat-card">
+        <span class="stat-title">Total Income</span>
+        <span class="stat-value" style="color: var(--accent-success);">{{ currency }}{{ total_income | round(2)
+            }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">This Month</div>
+    </div>
+
+    <!-- Budget Card -->
+    <div class="stat-card">
+        <div style="display: flex; justify-content: space-between; align-items: start;">
+            <span class="stat-title">Monthly Budget</span>
+            {% if budget == 0 %}
+            <a href="{{ url_for('profile') }}"
+                style="font-size: 0.75rem; color: var(--brand-start); text-decoration: none;">Set Budget</a>
+            {% else %}
+            <a href="{{ url_for('profile') }}"
+                style="font-size: 0.75rem; color: var(--text-tertiary); text-decoration: none;">Edit</a>
+            {% endif %}
+        </div>
+        <span class="stat-value">{{ currency }}{{ budget | round(2) }}</span>
+        <div style="margin-top: 0.5rem; font-size: 0.8125rem; color: var(--text-tertiary);">Target Limit</div>
+    </div>
+
+    <!-- Remaining -->
+    <div class="stat-card">
+        <span class="stat-title">Remaining</span>
+        {% set remaining = budget - total %}
+        {% if remaining < 0 %} <span class="stat-value text-danger">{{ currency }}{{ remaining | round(2) }}</span>
+            <div class="stat-sub text-danger">Over Budget</div>
+            {% else %}
+            <span class="stat-value text-success">{{ currency }}{{ remaining | round(2) }}</span>
+            <div class="stat-sub text-tertiary">Safe to spend</div>
+            {% endif %}
+    </div>
+</div>
+
+<!-- Main Content Split -->
+<div class="dashboard-split">
+    <!-- Recent Activity Table -->
+    <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Recent Activity</h2>
+            <a href="{{ url_for('expenses') }}"
+                style="font-size: 0.875rem; color: var(--brand-start); text-decoration: none; font-weight: 500;">View
+                All</a>
+        </div>
+        <div class="table-responsive">
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th style="padding-top: 0.75rem; padding-bottom: 0.75rem;">Date</th>
+                        <th style="padding-top: 0.75rem; padding-bottom: 0.75rem;">Category</th>
+                        <th style="padding-top: 0.75rem; padding-bottom: 0.75rem;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses[:5] %}
+                    <tr>
+                        <td style="padding: 0.75rem 1.5rem;">{{ expense.date | format_date }}</td>
+                        <td style="padding: 0.75rem 1.5rem;"><span class="badge">{{ expense.category }}</span></td>
+                        <td class="amount-cell {% if expense.type == 'income' %}text-income{% else %}text-expense{% endif %}"
+                            style="padding: 0.75rem 1.5rem;">
+                            {{ '+' if expense.type == 'income' else '-' }}{{ currency }}{{ expense.amount | round(2) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" style="text-align: center; padding: 2rem;">No recent activity.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions (Side) -->
+    <div class="card" style="height: fit-content;">
+        <div class="card-header">
+            <h2>Quick Actions</h2>
+        </div>
+        <div class="card-body" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <a href="{{ url_for('add_expense') }}" class="btn-primary" style="justify-content: center;">+ Add
+                Transaction</a>
+            <a href="{{ url_for('expenses') }}" class="btn-secondary" style="justify-content: center;">View All
+                Transactions</a>
+            <a href="{{ url_for('reports') }}" class="btn-outline" style="justify-content: center;">View Reports</a>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Modal -->
+<div id="budget-modal" class="modal">
+    <div class="modal-content">
+        <span onclick="document.getElementById('budget-modal').style.display='none'" class="close">&times;</span>
+        <h2>Set Monthly Budget</h2>
+        <form action="{{ url_for('set_budget') }}" method="POST">
+            <div class="form-group">
+                <label>Budget Amount (₹)</label>
+                <input type="number" name="budget" required>
+            </div>
+            <button type="submit" class="btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    window.onclick = function (event) {
+        if (event.target.className === 'modal') {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+{% endblock %}

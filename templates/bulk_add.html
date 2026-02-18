@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Bulk Expense Entry</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Add Multiple Transactions</h2>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('bulk_add') }}">
+            <div class="table-responsive">
+                <table class="styled-table" id="bulk-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Amount ({{ currency }})</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th>Bank/Cash</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Initial Row -->
+                        <tr class="entry-row">
+                            <td><input type="date" name="date[]" value="{{ today }}" required></td>
+                            <td>
+                                <select name="category[]" required>
+                                    <option value="" disabled selected>Select</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td><input type="number" name="amount[]" step="0.01" placeholder="0.00" required></td>
+                            <td><input type="text" name="description[]" placeholder="Description"></td>
+                            <td>
+                                <select name="type[]">
+                                    <option value="expense">Expense</option>
+                                    <option value="income">Income</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="bank_account_id[]">
+                                    <option value="">Cash</option>
+                                    {% for bank in banks %}
+                                    <option value="{{ bank.id }}">{{ bank.bank_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td><button type="button" class="btn-icon danger remove-row"
+                                    onclick="removeRow(this)">&times;</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                <button type="button" class="btn-secondary" onclick="addRow()">+ Add Row</button>
+                <button type="submit" class="btn-primary">Save All</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function addRow() {
+        const tableBody = document.querySelector('#bulk-table tbody');
+        const firstRow = tableBody.querySelector('.entry-row');
+        const newRow = firstRow.cloneNode(true);
+
+        // Clear inputs
+        newRow.querySelectorAll('input').forEach(input => {
+            if (input.type !== 'date') input.value = '';
+            // keep date as is or reset? let's keep it for convenience
+        });
+
+        tableBody.appendChild(newRow);
+    }
+
+    function removeRow(btn) {
+        const row = btn.closest('tr');
+        const tbody = document.querySelector('#bulk-table tbody');
+        if (tbody.children.length > 1) {
+            row.remove();
+        } else {
+            alert("At least one row is required.");
+        }
+    }
+</script>
+
+<style>
+    .styled-table input,
+    .styled-table select {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-small);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .btn-icon {
+        background: none;
+        border: none;
+        font-size: 1.25rem;
+        cursor: pointer;
+        padding: 0 0.5rem;
+    }
+
+    .btn-icon.danger {
+        color: var(--accent-danger);
+    }
+</style>
+{% endblock %}
