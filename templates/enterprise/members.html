@@ -3,32 +3,47 @@
 {% block enterprise_content %}
 <div class="ent-section">
     <div class="section-header">
-        <h3>Team Members</h3>
+        <h3>Team / Staff</h3>
         <button class="btn-primary" onclick="document.getElementById('add-member-modal').style.display='flex'">+ Add
-            Member</button>
+            Staff</button>
     </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for cat, msg in messages %}
+    <div style="padding:0.65rem 1rem; border-radius:6px; margin-bottom:1rem; font-size:0.875rem;
+                background:{% if cat=='success' %}#ecfdf5{% elif cat=='error' %}#fef2f2{% else %}#eff6ff{% endif %};
+                color:{% if cat=='success' %}#065f46{% elif cat=='error' %}#991b1b{% else %}#1e3a8a{% endif %};">
+        {{ msg }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
     <div class="reports-table-wrapper">
         <table class="reports-table">
             <thead>
                 <tr>
+                    <th>#</th>
                     <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
+                    <th>Designation</th>
+                    <th>Added</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in members_list %}
+                {% for member in staff_list %}
                 <tr>
-                    <td style="font-weight: 600;">{{ item.profiles.full_name or 'N/A' }}</td>
-                    <td>{{ item.profiles.email }}</td>
-                    <td><span class="badge" style="background: #eef2ff; color: #4338ca;">{{ item.role|capitalize
-                            }}</span></td>
-                    <td><span class="badge badge-success">Active</span></td>
+                    <td style="color:var(--text-tertiary); font-size:0.82rem;">{{ loop.index }}</td>
+                    <td style="font-weight:600;">{{ member.name }}</td>
+                    <td>{{ member.designation or '—' }}</td>
+                    <td style="color:var(--text-tertiary); font-size:0.82rem;">{{ member.created_at.date() if
+                        member.created_at else '—' }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center; color: var(--text-tertiary);">No members found.</td>
+                    <td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:2rem 0;">
+                        No staff added yet. Click <strong>+ Add Staff</strong> to begin.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -36,31 +51,33 @@
     </div>
 </div>
 
-<!-- Modal Placeholder -->
-<div id="add-member-modal"
-    style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; justify-content:center; align-items:center; padding: 1rem;">
-    <div class="auth-card" style="width: 100%; max-width: 400px; margin: 0;">
-        <h2>Add Team Member</h2>
-        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.5rem;">New members must have an
-            existing account in the application.</p>
+<!-- Add Staff Modal -->
+<div id="add-member-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000;
+           justify-content:center; align-items:center; padding:1rem;">
+    <div style="background:#fff; border-radius:1rem; padding:2rem; width:100%; max-width:420px;
+                box-shadow:0 20px 60px rgba(0,0,0,0.2); position:relative;">
+        <button onclick="document.getElementById('add-member-modal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.4rem;
+                   cursor:pointer; color:var(--text-tertiary);">&#x2715;</button>
+        <h3 style="margin:0 0 0.25rem;">Add Staff Member</h3>
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+            Add anyone from your team — no account required.
+        </p>
         <form method="POST" action="{{ url_for('enterprise.members') }}">
-            <div class="form-group">
-                <label>User Email</label>
-                <input type="email" name="email" placeholder="colleague@company.com" required>
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label style="font-weight:600; font-size:0.875rem;">Full Name <span
+                        style="color:#dc2626;">*</span></label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. Ravi Kumar" required
+                    style="margin-top:0.35rem;">
             </div>
-            <div class="form-group">
-                <label>Role</label>
-                <select name="role" required
-                    style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-default);">
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                    <option value="viewer">Viewer</option>
-                </select>
+            <div class="form-group" style="margin-bottom:1.5rem;">
+                <label style="font-weight:600; font-size:0.875rem;">Designation / Role</label>
+                <input type="text" name="designation" class="form-control"
+                    placeholder="e.g. Accountant, Driver, Manager" style="margin-top:0.35rem;">
             </div>
-            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+            <div style="display:flex; gap:0.75rem;">
                 <button type="button" class="btn-secondary" style="flex:1"
                     onclick="document.getElementById('add-member-modal').style.display='none'">Cancel</button>
-                <button type="submit" class="btn-primary" style="flex:1">Add Member</button>
+                <button type="submit" class="btn-primary" style="flex:1">Add to Team</button>
             </div>
         </form>
     </div>

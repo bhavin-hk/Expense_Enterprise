@@ -1,5 +1,26 @@
 /* --- Enterprise Dashboard Styling (High-Density) --- */
 
+/* Period filter pills (revenue / expenses pages) */
+.period-pill {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.period-pill.active,
+.period-pill:hover {
+    background: #4f46e5;
+    border-color: #4f46e5;
+    color: #ffffff !important;
+}
+
 .ent-dashboard {
     padding: 0.5rem 0;
     color: var(--text-primary);

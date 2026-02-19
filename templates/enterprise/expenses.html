@@ -3,33 +3,61 @@
 {% block enterprise_content %}
 <div class="ent-section">
     <div class="section-header">
-        <h3>Operational Expenses</h3>
-        <button class="btn-primary" disabled>+ Add Expense</button>
+        <h3>Expenses</h3>
+        {% if expenses_list %}
+        <span style="font-size:1.1rem; font-weight:700; color:#dc2626;">
+            Total: -&nbsp;{{ currency }}{{ "%.2f"|format(expenses_list|sum(attribute='amount')|float) }}
+        </span>
+        {% endif %}
     </div>
+
+    <!-- Period Filter Bar -->
+    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+        <a href="?period=this_year" class="period-pill {% if period == 'this_year' %}active{% endif %}">This Year</a>
+        <a href="?period=this_month" class="period-pill {% if period == 'this_month' %}active{% endif %}">This Month</a>
+        <a href="?period=this_week" class="period-pill {% if period == 'this_week' %}active{% endif %}">This Week</a>
+        <a href="?period=custom" class="period-pill {% if period == 'custom' %}active{% endif %}">Custom</a>
+        {% if period == 'custom' %}
+        <form method="get" style="display:flex; align-items:center; gap:0.5rem; margin-left:0.25rem;">
+            <input type="hidden" name="period" value="custom">
+            <input type="date" name="start_date" value="{{ start_date or '' }}" class="form-control"
+                style="width:auto;">
+            <span style="color:var(--text-tertiary);">to</span>
+            <input type="date" name="end_date" value="{{ end_date or '' }}" class="form-control" style="width:auto;">
+            <button type="submit" class="btn-primary" style="padding:0.4rem 1rem;">Apply</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- Table -->
     <div class="reports-table-wrapper">
         <table class="reports-table">
             <thead>
                 <tr>
                     <th>Date</th>
+                    <th>Type</th>
                     <th>Category</th>
-                    <th>Recipient</th>
-                    <th>Amount</th>
-                    <th>Payment Method</th>
+                    <th>Taken By</th>
+                    <th>Narrative</th>
+                    <th style="text-align:right;">Amount</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in expenses_list %}
                 <tr>
                     <td>{{ item.date }}</td>
-                    <td>{{ item.category }}</td>
-                    <td>{{ item.recipient or 'Vendor' }}</td>
-                    <td style="font-weight: 600; color: #dc2626;">- {{ currency }}{{ "%.2f"|format(item.amount) }}</td>
-                    <td><span class="badge" style="background: #f3f4f6; color: #4b5563;">{{
-                            item.payment_method|capitalize }}</span></td>
+                    <td><span class="badge" style="font-size:0.75rem; background:#fee2e2; color:#dc2626;">Expense</span>
+                    </td>
+                    <td>{{ item.category or '—' }}</td>
+                    <td>{{ item.taken_by_name or item.taken_by or '—' }}</td>
+                    <td style="color:var(--text-secondary);">{{ item.narrative or item.description or '—' }}</td>
+                    <td style="text-align:right; font-weight:600; color:#dc2626;">-&nbsp;{{ currency }}{{
+                        "%.2f"|format(item.amount|float) }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" style="text-align: center; color: var(--text-tertiary);">No expense records found.
+                    <td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:2rem 0;">
+                        No expense records found for this period.
                     </td>
                 </tr>
                 {% endfor %}

@@ -2,39 +2,6 @@
 
 {% block enterprise_content %}
 <style>
-    .input-group {
-        display: flex;
-        gap: 0;
-        width: 100%;
-    }
-
-    .input-group .input-select {
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
-        flex: 1;
-    }
-
-    .input-group .btn-add-on {
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-        padding: 0 12px;
-        background: var(--surface-secondary);
-        border: 1px solid var(--border-color);
-        border-left: none;
-        color: var(--text-primary);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s;
-        font-size: 1.2rem;
-    }
-
-    .input-group .btn-add-on:hover {
-        background: var(--surface-tertiary);
-        color: var(--accent-color);
-    }
-
     /* Nested Modal Style - must be higher than base modal-overlay (2000) */
     .modal-overlay.nested {
         z-index: 2100;
@@ -188,17 +155,13 @@
 
             <div class="form-group">
                 <label>Taken By</label>
-                <div class="input-group">
-                    <select name="taken_by" id="takenBySelect" class="input-select">
-                        {% for member in members %}
-                        <option value="{{ member.id }}" {% if member.id==session['user'] %}selected{% endif %}>
-                            {{ member.full_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <button type="button" class="btn-add-on" onclick="openModal('addMemberModal')"
-                        title="Add New Person">+</button>
-                </div>
+                <select name="taken_by" id="takenBySelect" class="input-select full-width">
+                    <option value="">— Select staff —</option>
+                    {% for m in org_members %}
+                    <option value="{{ m.name }}">{{ m.name }}{% if m.designation %} ({{ m.designation }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
 
             <div class="form-group">
@@ -229,30 +192,6 @@
     </div>
 </div>
 
-<!-- Fast Add Member Modal -->
-<div id="addMemberModal" class="modal-overlay nested">
-    <div class="modal-content" style="max-width: 400px;">
-        <div class="modal-header">
-            <h3>Add New Person</h3>
-            <button class="close-btn" onclick="closeModal('addMemberModal')">&times;</button>
-        </div>
-        <div class="modal-form">
-            <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" id="newMemberName" placeholder="e.g. John Doe" class="input-text full-width">
-            </div>
-            <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" id="newMemberEmail" placeholder="e.g. john@example.com"
-                    class="input-text full-width">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-secondary" onclick="closeModal('addMemberModal')">Cancel</button>
-                <button type="button" class="btn-primary" onclick="submitFastAddMember()">Add Now</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
     function openModal(id) {
@@ -262,44 +201,6 @@
         document.getElementById(id).classList.remove('active');
     }
 
-    async function submitFastAddMember() {
-        const name = document.getElementById('newMemberName').value;
-        const email = document.getElementById('newMemberEmail').value;
-
-        if (!name || !email) {
-            alert('Please fill both name and email');
-            return;
-        }
-
-        try {
-            const response = await fetch("{{ url_for('enterprise.add_member_fast') }}", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ full_name: name, email: email })
-            });
-
-            const result = await response.json();
-            if (result.success) {
-                // Add to dropdown
-                const select = document.getElementById('takenBySelect');
-                const option = document.createElement('option');
-                option.value = result.member.id;
-                option.text = result.member.full_name;
-                option.selected = true;
-                select.add(option);
-
-                // Clear and close
-                document.getElementById('newMemberName').value = '';
-                document.getElementById('newMemberEmail').value = '';
-                closeModal('addMemberModal');
-            } else {
-                alert("Error: " + (result.error || "Unknown error"));
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Failed to add member.");
-        }
-    }
 
     // Auto-set today's date if not passed
     window.onload = function () {

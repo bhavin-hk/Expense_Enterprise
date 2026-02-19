@@ -147,8 +147,16 @@
             <!-- Taken By -->
             <div class="form-group" style="margin-bottom: 1rem;">
                 <label style="font-weight: 600; font-size: 0.875rem;">Taken By / Investor</label>
-                <input type="text" name="taken_by" class="form-control" placeholder="e.g. John Doe, Investor Name"
-                    style="margin-top:0.35rem;">
+                <select name="taken_by" class="form-control" style="margin-top:0.35rem;">
+                    <option value="">— Select —</option>
+                    {% for m in org_members %}
+                    <option value="{{ m.name }}">{{ m.name }}{% if m.designation %} ({{ m.designation }}){% endif %}
+                    </option>
+                    {% endfor %}
+                    <option value="__other__">Other (type below)</option>
+                </select>
+                <input type="text" name="taken_by_other" class="form-control" id="takenByOther"
+                    placeholder="Enter name manually" style="margin-top:0.4rem; display:none;">
             </div>
 
             <!-- Narrative -->
@@ -238,7 +246,15 @@
                     saveBtn.disabled = false;
                 });
         });
+
+        // Taken By — show text input when "Other" is selected
+        if (takenBySelect) {
+            takenBySelect.addEventListener('change', function () {
+                takenByOther.style.display = this.value === '__other__' ? 'block' : 'none';
+            });
+        }
     })();
+
 </script>
 
 {% endblock %}

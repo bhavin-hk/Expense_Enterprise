@@ -84,6 +84,14 @@ class BaseService:
         """Ensure a dedicated org exists for this business_name; return its id."""
         raise NotImplementedError
 
+    def add_org_member(self, org_id: str, name: str, designation: str) -> bool:
+        """Add a named staff member to the org's ent_staff table."""
+        raise NotImplementedError
+
+    def get_org_members(self, org_id: str) -> List[Dict[str, Any]]:
+        """Return all staff members for this org."""
+        raise NotImplementedError
+
     def add_holding_payment(self, org_id: str, user_id: str, data: dict) -> bool:
         raise NotImplementedError
 
@@ -200,6 +208,23 @@ class SupabaseService(BaseService):
     def provision_business_org(self, user_id: str, business_name: str) -> Optional[str]:
         # Supabase orgs are managed separately; return None
         return None
+
+    def add_org_member(self, org_id: str, name: str, designation: str) -> bool:
+        try:
+            self.db.table('ent_staff').insert(
+                {'organization_id': org_id, 'name': name, 'designation': designation}
+            ).execute()
+            return True
+        except Exception as e:
+            print(f"[add_org_member] {e}")
+            return False
+
+    def get_org_members(self, org_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = self.db.table('ent_staff').select('*').eq('organization_id', org_id).order('name').execute()
+            return res.data or []
+        except Exception:
+            return []
 
     def add_enterprise_bank(self, user_id: str, data: Dict[str, Any]) -> bool:
         # Enterprise banks are local-only
@@ -554,7 +579,6 @@ class PostgresService(BaseService):
         conn = PostgresService._pool.getconn()
         try:
             with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
-                # 1. Check if this user already has an org for this business name
                 cur.execute(
                     """SELECT o.id FROM ent_organizations o
                        JOIN ent_members m ON o.id = m.organization_id
@@ -566,7 +590,6 @@ class PostgresService(BaseService):
                 if existing:
                     return str(existing['id'])
 
-                # 2. No org yet — create one (within the same transaction)
                 cur.execute(
                     "INSERT INTO ent_organizations (name) VALUES (%s) RETURNING id",
                     (business_name,)
@@ -576,7 +599,6 @@ class PostgresService(BaseService):
                     return None
                 org_id = str(new_org['id'])
 
-                # 3. Enroll user as admin — FK is satisfied because we're in the same transaction
                 cur.execute(
                     """INSERT INTO ent_members (organization_id, user_id, role)
                        VALUES (%s, %s, 'admin')
@@ -590,6 +612,57 @@ class PostgresService(BaseService):
             conn.rollback()
             print(f"[provision_business_org] Error: {e}")
             return None
+        finally:
+            PostgresService._pool.putconn(conn)
+
+    def add_org_member(self, org_id: str, name: str, designation: str) -> bool:
+        """Insert a named staff member into ent_staff for this org."""
+        import uuid
+        conn = PostgresService._pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Create table if it doesn't exist (no pgcrypto needed - id supplied by Python)
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS ent_staff (
+                        id              TEXT PRIMARY KEY,
+                        organization_id TEXT NOT NULL,
+                        name            TEXT NOT NULL,
+                        designation     TEXT,
+                        created_at      TIMESTAMPTZ DEFAULT now()
+                    )"""
+                )
+                cur.execute(
+                    "INSERT INTO ent_staff (id, organization_id, name, designation) VALUES (%s, %s, %s, %s)",
+                    (str(uuid.uuid4()), org_id, name, designation)
+                )
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print(f"[add_org_member] {e}")
+            return False
+        finally:
+            PostgresService._pool.putconn(conn)
+
+    def get_org_members(self, org_id: str) -> List[Dict[str, Any]]:
+        """Return all staff for this org. Returns [] if table doesn't exist yet."""
+        conn = PostgresService._pool.getconn()
+        try:
+            with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM ent_staff WHERE organization_id = %s ORDER BY name",
+                    (org_id,)
+                )
+                rows = cur.fetchall()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            # Table might not exist yet (no one has added a member)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"[get_org_members] {e}")
+            return []
         finally:
             PostgresService._pool.putconn(conn)
 
@@ -809,6 +882,18 @@ class PostgresService(BaseService):
         except Exception as e:
             print(f"get_business_credentials error: {e}")
             return None
+
+    def get_user_businesses(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return all businesses registered by this user."""
+        try:
+            res = self._execute_query(
+                "SELECT business_name, email FROM enterprise_credentials WHERE user_id = %s ORDER BY business_name",
+                (user_id,)
+            )
+            return res or []
+        except Exception as e:
+            print(f"get_user_businesses error: {e}")
+            return []
 
     def create_business_credentials(self, user_id: str, business_name: str, email: str, password_hash: str, token: str) -> bool:
         """Insert new business credentials into local PostgreSQL."""

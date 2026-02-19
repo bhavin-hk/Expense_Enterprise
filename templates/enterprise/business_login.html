@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="auth-wrapper" style="min-height: 80vh; display:flex; align-items:center; justify-content:center;">
+    <div class="auth-card" style="width:100%; max-width:420px;">
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for cat, msg in messages %}
+        <div style="padding:0.65rem 1rem; border-radius:6px; margin-bottom:1.25rem; font-size:0.875rem;
+                    background:{% if cat=='success' %}#ecfdf5{% elif cat=='error' %}#fef2f2{% else %}#eff6ff{% endif %};
+                    color:{% if cat=='success' %}#065f46{% elif cat=='error' %}#991b1b{% else %}#1e3a8a{% endif %};">
+            {{ msg }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.35rem;">
+            <a href="{{ url_for('enterprise.select_organization') }}"
+                style="color:var(--text-tertiary); font-size:0.82rem; text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem;">
+                ← Switch Business
+            </a>
+        </div>
+
+        <h1 style="font-size:1.4rem; font-weight:700; margin-bottom:0.25rem;">Sign in to Business</h1>
+        <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1.75rem;">
+            Enter the password for <strong>{{ business_name }}</strong>.
+        </p>
+
+        <form method="POST" action="{{ url_for('enterprise.enterprise_login') }}">
+            <!-- Hidden: pre-filled business name -->
+            <input type="hidden" name="business_name" value="{{ business_name }}">
+
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label
+                    style="font-weight:600; font-size:0.875rem; display:block; margin-bottom:0.4rem;">Business</label>
+                <input type="text" value="{{ business_name }}" class="form-control" readonly
+                    style="background:var(--surface-hover,#f3f4f6); color:var(--text-secondary); cursor:default;">
+            </div>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label style="font-weight:600; font-size:0.875rem; display:block; margin-bottom:0.4rem;">Email</label>
+                <input type="email" name="email" class="form-control" placeholder="Your business email" required
+                    autofocus>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1.5rem;">
+                <label
+                    style="font-weight:600; font-size:0.875rem; display:block; margin-bottom:0.4rem;">Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Business password" required>
+            </div>
+
+            <button type="submit" class="btn-primary" style="width:100%; padding:0.8rem;">
+                Sign In &rarr;
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -92,26 +92,47 @@
             <table class="reports-table">
                 <thead>
                     <tr>
-                        <th>Report Name</th>
+                        <th>Report</th>
                         <th>Date Range</th>
-                        <th>Status</th>
+                        <th>Net P/L</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {% for rpt in report_data %}
                     <tr>
-                        <td>Current Period Summary</td>
-                        <td>Latest Data</td>
-                        <td><span class="badge badge-success">Generated</span></td>
-                        <td><a href="{{ url_for('enterprise.export', format='csv') }}"
-                                style="color: var(--brand-start); font-weight: 600;">Download</a></td>
+                        <td>
+                            <div style="font-weight:600;">{{ rpt.name }}</div>
+                            <div style="font-size:0.78rem; color:var(--text-tertiary); margin-top:0.15rem;">
+                                Income {{ currency }}{{ rpt.income }} &nbsp;|&nbsp; Expense {{ currency }}{{ rpt.expense
+                                }}
+                            </div>
+                        </td>
+                        <td>{{ rpt.range }}</td>
+                        <td>
+                            <span class="{{ 'status-positive' if rpt.positive else 'status-negative' }}"
+                                style="font-weight:600;">
+                                {{ currency }}{{ rpt.net }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if rpt.can_download %}
+                            <a href="{{ url_for('enterprise.export', format='csv') }}?{{ rpt.dl_params }}"
+                                style="color:var(--brand-start); font-weight:600; text-decoration:none;">
+                                Download CSV
+                            </a>
+                            {% else %}
+                            <span style="color:var(--text-tertiary);">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
+                    {% else %}
                     <tr>
-                        <td>Quarterly Audit Report</td>
-                        <td>Q1 2026</td>
-                        <td><span class="badge badge-warning">Archived</span></td>
-                        <td><span style="color: var(--text-tertiary);">Request</span></td>
+                        <td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:1.5rem;">
+                            No data yet for this period.
+                        </td>
                     </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
