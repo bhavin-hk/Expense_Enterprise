@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS public.ent_revenue (
     status TEXT DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'cancelled')),
     taken_by UUID REFERENCES public.profiles(id),
     method TEXT,
+    bank_account_id UUID REFERENCES public.enterprise_bank_accounts(id),
     narrative TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

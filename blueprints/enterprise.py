@@ -430,6 +430,9 @@ def add_transaction():
             data['category'] = 'Other'
             
         if t_type == 'Income':
+            # ent_revenue table has no 'category' column
+            if 'category' in data:
+                del data['category']
             success = db_service.add_revenue(org_id, data)
         else:
             success = db_service.add_expense(org_id, data)

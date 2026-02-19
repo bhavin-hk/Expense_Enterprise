@@ -280,9 +280,10 @@ class PostgresService(BaseService):
 
     def get_revenue(self, org_id: str, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
         query = """
-            SELECT r.*, p.full_name as taken_by_name 
+            SELECT r.*, p.full_name as taken_by_name, b.bank_name, b.account_type 
             FROM ent_revenue r
             LEFT JOIN profiles p ON r.taken_by = p.id
+            LEFT JOIN enterprise_bank_accounts b ON r.bank_account_id = b.id
             WHERE r.organization_id = %s
         """
         params = [org_id]
@@ -295,31 +296,14 @@ class PostgresService(BaseService):
         query += " ORDER BY r.date DESC"
         data = self._execute_query(query, tuple(params))
         
-        # If we have Supabase, map bank names
-        if self.sb and data:
-            try:
-                # Fetch all banks for current user to map names
-                # (Optimization: could use IN clause with unique bank_account_ids)
-                email_query = "SELECT email FROM profiles WHERE id = %s"
-                current_user_email = session.get('user_email')
-                if current_user_email:
-                    sb_user = self.sb.table('profiles').select('id').eq('email', current_user_email).execute()
-                    if sb_user.data:
-                        sb_uid = sb_user.data[0]['id']
-                        banks = self.sb.table('bank_accounts').select('id, bank_name').eq('user_id', sb_uid).execute()
-                        bank_map = {b['id']: b['bank_name'] for b in banks.data}
-                        for r in data:
-                            if r.get('bank_account_id') in bank_map:
-                                r['bank_name'] = bank_map[r['bank_account_id']]
-            except:
-                pass
         return data
 
     def get_expenses(self, org_id: str, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
         query = """
-            SELECT e.*, p.full_name as taken_by_name 
+            SELECT e.*, p.full_name as taken_by_name, b.bank_name, b.account_type 
             FROM ent_expenses e
             LEFT JOIN profiles p ON e.taken_by = p.id
+            LEFT JOIN enterprise_bank_accounts b ON e.bank_account_id = b.id
             WHERE e.organization_id = %s
         """
         params = [org_id]
@@ -332,21 +316,6 @@ class PostgresService(BaseService):
         query += " ORDER BY e.date DESC"
         data = self._execute_query(query, tuple(params))
 
-        # Map bank names from Supabase
-        if self.sb and data:
-            try:
-                current_user_email = session.get('user_email')
-                if current_user_email:
-                    sb_user = self.sb.table('profiles').select('id').eq('email', current_user_email).execute()
-                    if sb_user.data:
-                        sb_uid = sb_user.data[0]['id']
-                        banks = self.sb.table('bank_accounts').select('id, bank_name').eq('user_id', sb_uid).execute()
-                        bank_map = {b['id']: b['bank_name'] for b in banks.data}
-                        for e in data:
-                            if e.get('bank_account_id') in bank_map:
-                                e['bank_name'] = bank_map[e['bank_account_id']]
-            except:
-                pass
         return data
 
     def add_revenue(self, org_id: str, data: Dict[str, Any]) -> bool:
