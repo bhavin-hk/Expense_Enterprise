@@ -1,40 +1,232 @@
 {% extends "enterprise/layout.html" %}
 
 {% block enterprise_content %}
-<div class="ent-section">
-    <div class="section-header">
-        <h3>Capital Investments</h3>
-        <button class="btn-primary" disabled>+ New Investment</button>
+
+<!-- ============================================================
+     KPI BOXES — 2 in a row
+     ============================================================ -->
+<div style="display: flex; flex-direction: row; gap: 1.25rem; margin-bottom: 1.75rem; flex-wrap: nowrap;">
+
+    <!-- Box 1: Total Investment — Green -->
+    <div style="flex: 1; min-width: 0; background: var(--surface-card, #fff);
+                border-radius: var(--radius-default, 0.75rem); padding: 1.25rem 1.5rem;
+                border-top: 4px solid #16a34a;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);">
+        <div style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+                    color: var(--text-tertiary, #9ca3af); text-transform: uppercase; margin-bottom: 0.5rem;">
+            Total Investment
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #16a34a; margin-bottom: 0.75rem;">
+            ₹{{ kpis.total_investment }}
+        </div>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+                     font-size: 0.75rem; font-weight: 600; background: #dcfce7; color: #16a34a;">
+            ↑ Capital Invested
+        </span>
     </div>
-    <div class="reports-table-wrapper">
+
+    <!-- Box 2: Total Withdraw — Red -->
+    <div style="flex: 1; min-width: 0; background: var(--surface-card, #fff);
+                border-radius: var(--radius-default, 0.75rem); padding: 1.25rem 1.5rem;
+                border-top: 4px solid #dc2626;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);">
+        <div style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+                    color: var(--text-tertiary, #9ca3af); text-transform: uppercase; margin-bottom: 0.5rem;">
+            Total Withdraw
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #dc2626; margin-bottom: 0.75rem;">
+            ₹{{ kpis.total_withdraw }}
+        </div>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+                     font-size: 0.75rem; font-weight: 600; background: #fee2e2; color: #dc2626;">
+            ↓ Capital Withdrawn
+        </span>
+    </div>
+
+</div>
+
+<!-- ============================================================
+     CAPITAL INVESTMENTS TABLE
+     ============================================================ -->
+<div class="ent-section">
+    <div class="section-header"
+        style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <h3 style="margin: 0;">Capital Investments</h3>
+        <button id="openInvModal" class="btn-primary"
+            style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.25rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" style="width: 18px; height: 18px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Investment
+        </button>
+    </div>
+
+    <div class="reports-table-wrapper" style="margin-top: 1.25rem; overflow-x: auto;">
         <table class="reports-table">
             <thead>
                 <tr>
                     <th>Date</th>
-                    <th>Source / Investor</th>
                     <th>Type</th>
-                    <th>Amount</th>
-                    <th>Status</th>
+                    <th>Taken By</th>
+                    <th>Narrative</th>
+                    <th>Amount (₹)</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="invTableBody">
                 {% for item in investments_list %}
                 <tr>
                     <td>{{ item.date }}</td>
-                    <td style="font-weight: 600;">{{ item.source or 'Equity' }}</td>
-                    <td>{{ item.type|capitalize or 'Seed' }}</td>
-                    <td style="font-weight: 600; color: var(--brand-start);">{{ currency }}{{ "%.2f"|format(item.amount)
-                        }}</td>
-                    <td><span class="badge badge-success">Committed</span></td>
+                    <td>
+                        {% set itype = item.get('type') or 'investment' %}
+                        <span style="padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+                                     background: {{ '#dcfce7' if itype == 'investment' else '#fee2e2' }};
+                                     color: {{ '#16a34a' if itype == 'investment' else '#dc2626' }};">
+                            {{ itype | capitalize }}
+                        </span>
+                    </td>
+                    <td style="font-weight: 600;">{{ item.get('taken_by') or item.get('source') or '—' }}</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="{{ item.get('narrative') or item.get('description') or '' }}">
+                        {{ item.get('narrative') or item.get('description') or '—' }}
+                    </td>
+                    <td
+                        style="font-weight: 700; color: {{ '#16a34a' if (item.get('type') or 'investment') == 'investment' else '#dc2626' }};">
+                        ₹{{ "%.2f" | format(item.amount | float) }}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" style="text-align: center; color: var(--text-tertiary);">No investment records
-                        found.</td>
+                    <td colspan="5" style="text-align: center; color: var(--text-tertiary); padding: 2.5rem 0;">
+                        No investment records found. Click <strong>+ New Investment</strong> to add one.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+
+<!-- ============================================================
+     ADD INVESTMENT MODAL
+     ============================================================ -->
+<div id="invModal" style="display:none; position:fixed; inset:0; z-index:1000;
+     background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+     align-items: center; justify-content: center;">
+    <div style="background: var(--surface-card, #fff); border-radius: 1rem; padding: 2rem;
+                width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+                position: relative; max-height: 90vh; overflow-y: auto;">
+
+        <button id="closeInvModal"
+            style="position:absolute; top:1rem; right:1rem; background:none; border:none; cursor:pointer; color: var(--text-tertiary);">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" style="width:22px;height:22px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h3 style="margin: 0 0 1.5rem 0; font-size: 1.125rem;">Add Investment / Withdraw</h3>
+
+        <form id="invForm">
+            <!-- Date -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Date <span style="color:#dc2626">*</span></label>
+                <input type="date" name="date" class="form-control" required style="margin-top:0.35rem;">
+            </div>
+
+            <!-- Type -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Type <span style="color:#dc2626">*</span></label>
+                <select name="type" class="form-control" style="margin-top:0.35rem;">
+                    <option value="investment">Investment (Capital In)</option>
+                    <option value="withdraw">Withdraw (Capital Out)</option>
+                </select>
+            </div>
+
+            <!-- Taken By -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Taken By / Investor</label>
+                <input type="text" name="taken_by" class="form-control" placeholder="e.g. John Doe, Investor Name"
+                    style="margin-top:0.35rem;">
+            </div>
+
+            <!-- Narrative -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Narrative</label>
+                <textarea name="narrative" class="form-control" rows="3"
+                    placeholder="Brief description of this entry..."
+                    style="margin-top:0.35rem; resize:vertical;"></textarea>
+            </div>
+
+            <!-- Amount -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Amount (₹) <span
+                        style="color:#dc2626">*</span></label>
+                <input type="number" name="amount" class="form-control" placeholder="0.00" min="0" step="0.01" required
+                    style="margin-top:0.35rem;">
+            </div>
+
+            <div id="invError" style="display:none; color:#dc2626; font-size:0.875rem; margin-bottom:1rem;"></div>
+
+            <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+                <button type="button" id="cancelInvModal" class="btn-secondary">Cancel</button>
+                <button type="submit" id="saveInvBtn" class="btn-primary">Save Entry</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+    (function () {
+        const modal = document.getElementById('invModal');
+        const openBtn = document.getElementById('openInvModal');
+        const closeBtn = document.getElementById('closeInvModal');
+        const cancelBtn = document.getElementById('cancelInvModal');
+        const form = document.getElementById('invForm');
+        const errBox = document.getElementById('invError');
+        const saveBtn = document.getElementById('saveInvBtn');
+
+        function openModal() { modal.style.display = 'flex'; form.reset(); errBox.style.display = 'none'; }
+        function closeModal() { modal.style.display = 'none'; }
+
+        openBtn.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            errBox.style.display = 'none';
+            saveBtn.textContent = 'Saving...';
+            saveBtn.disabled = true;
+
+            const fd = new FormData(form);
+            fetch('{{ url_for("enterprise.investments") }}', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        closeModal();
+                        setTimeout(() => location.reload(), 200);
+                    } else {
+                        errBox.textContent = data.error || 'Something went wrong.';
+                        errBox.style.display = 'block';
+                    }
+                })
+                .catch(() => {
+                    errBox.textContent = 'Network error. Please try again.';
+                    errBox.style.display = 'block';
+                })
+                .finally(() => {
+                    saveBtn.textContent = 'Save Entry';
+                    saveBtn.disabled = false;
+                });
+        });
+    })();
+</script>
+
 {% endblock %}

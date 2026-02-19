@@ -1,12 +1,456 @@
 {% extends "enterprise/layout.html" %}
 
 {% block enterprise_content %}
-<div class="ent-section">
-    <div class="section-header">
-        <h3>Holding Payments</h3>
+
+<!-- ============================================================
+     KPI BOXES — 3 in a row (forced flex row)
+     ============================================================ -->
+<div style="display: flex; flex-direction: row; gap: 1.25rem; margin-bottom: 1.75rem; flex-wrap: nowrap;">
+
+    <!-- Box 1: Total Amount (Receivable) — Green -->
+    <div style="flex: 1; min-width: 0; background: var(--surface-card, #fff);
+                border-radius: var(--radius-default, 0.75rem); padding: 1.25rem 1.5rem;
+                border-top: 4px solid #16a34a;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);">
+        <div style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+                    color: var(--text-tertiary, #9ca3af); text-transform: uppercase; margin-bottom: 0.5rem;">
+            Total Amount
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #16a34a; margin-bottom: 0.75rem;">
+            ₹{{ kpis.total_receivable }}
+        </div>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+                     font-size: 0.75rem; font-weight: 600; background: #dcfce7; color: #16a34a;">
+            ↑ Total Receivable
+        </span>
     </div>
-    <div class="placeholder-content">
-        <p>This section is under development. It will track all pending contract payouts and revenue collections.</p>
+
+    <!-- Box 2: Net Holding — Green if positive, Red if negative -->
+    {% set net_color = '#16a34a' if kpis.net_positive else '#dc2626' %}
+    {% set net_bg = '#dcfce7' if kpis.net_positive else '#fee2e2' %}
+    <div style="flex: 1; min-width: 0; background: var(--surface-card, #fff);
+                border-radius: var(--radius-default, 0.75rem); padding: 1.25rem 1.5rem;
+                border-top: 4px solid {{ net_color }};
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);">
+        <div style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+                    color: var(--text-tertiary, #9ca3af); text-transform: uppercase; margin-bottom: 0.5rem;">
+            Net Holding
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: {{ net_color }}; margin-bottom: 0.75rem;">
+            ₹{{ kpis.net_holding }}
+        </div>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+                     font-size: 0.75rem; font-weight: 600; background: {{ net_bg }}; color: {{ net_color }};">
+            {% if kpis.net_positive %}↑ Net Surplus{% else %}↓ Net Deficit{% endif %}
+        </span>
+    </div>
+
+    <!-- Box 3: Pending Payouts (Payable) — Red -->
+    <div style="flex: 1; min-width: 0; background: var(--surface-card, #fff);
+                border-radius: var(--radius-default, 0.75rem); padding: 1.25rem 1.5rem;
+                border-top: 4px solid #dc2626;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.07);">
+        <div style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;
+                    color: var(--text-tertiary, #9ca3af); text-transform: uppercase; margin-bottom: 0.5rem;">
+            Pending Payouts
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #dc2626; margin-bottom: 0.75rem;">
+            ₹{{ kpis.total_payable }}
+        </div>
+        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+                     font-size: 0.75rem; font-weight: 600; background: #fee2e2; color: #dc2626;">
+            ↓ Total Payable
+        </span>
+    </div>
+
+</div>
+
+<!-- ============================================================
+     TRANSACTIONS TABLE SECTION
+     ============================================================ -->
+<div class="ent-section">
+    <div class="section-header"
+        style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <h3 style="margin: 0;">Holding Transactions</h3>
+        <button id="openAddTxnModal" class="btn-primary"
+            style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.25rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" style="width: 18px; height: 18px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Transaction
+        </button>
+    </div>
+
+    <div class="reports-table-wrapper" style="margin-top: 1.25rem; overflow-x: auto;">
+        <table class="reports-table" id="txnTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Amount (₹)</th>
+                    <th>Paid (₹)</th>
+                    <th>Remaining (₹)</th>
+                    <th>Expected Date</th>
+                    <th>Mobile No.</th>
+                    <th>Narrative</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="txnTableBody">
+                {% if transactions %}
+                {% for t in transactions %}
+                {% set is_settled = t.status == 'settled' %}
+                <tr id="row-{{ t.id }}">
+                    <td style="font-weight: 600;">{{ t.name }}</td>
+                    <td>
+                        <span style="padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+                                         background: {{ '#dcfce7' if t.type == 'receivable' else '#fee2e2' }};
+                                         color: {{ '#16a34a' if t.type == 'receivable' else '#dc2626' }};">
+                            {{ t.type | capitalize }}
+                        </span>
+                    </td>
+                    <td style="font-weight: 700;">₹{{ "%.2f" | format(t.amount | float) }}</td>
+                    <td style="color: #16a34a; font-weight: 600;">₹{{ "%.2f" | format((t.get('paid_amount') or 0) |
+                        float) }}
+                    </td>
+                    <td style="color: #dc2626; font-weight: 600;">₹{{ "%.2f" | format((t.get('remaining_amount') or
+                        t.amount) | float) }}</td>
+                    <td>{{ t.expected_date if t.expected_date else '—' }}</td>
+                    <td>{{ t.mobile_no if t.mobile_no else '—' }}</td>
+                    <td style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="{{ t.narrative }}">{{ t.narrative if t.narrative else '—' }}</td>
+                    <td>
+                        {% if t.status == 'settled' %}
+                        <span
+                            style="padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #dcfce7; color: #16a34a;">Settled</span>
+                        {% elif t.status == 'partial' %}
+                        <span
+                            style="padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #fef3c7; color: #d97706;">Partial</span>
+                        {% else %}
+                        <span
+                            style="padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #fef9c3; color: #854d0e;">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not is_settled %}
+                        <button class="settle-btn btn-secondary"
+                            style="padding: 0.3rem 0.85rem; font-size: 0.8rem; cursor: pointer;" data-id="{{ t.id }}"
+                            data-name="{{ t.name }}" data-type="{{ t.type }}" data-amount="{{ t.amount }}"
+                            data-paid="{{ t.get('paid_amount') or 0 }}"
+                            data-remaining="{{ t.get('remaining_amount') or t.amount }}"
+                            data-date="{{ t.expected_date or '' }}" data-mobile="{{ t.mobile_no or '' }}"
+                            data-narrative="{{ t.narrative or '' }}" data-status="{{ t.status }}">
+                            Settle
+                        </button>
+                        {% else %}
+                        <span style="color: var(--text-tertiary); font-size: 0.8rem;">Done</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr id="emptyRow">
+                    <td colspan="10" style="text-align: center; color: var(--text-tertiary); padding: 2.5rem 0;">
+                        No transactions yet. Click <strong>+ Add Transaction</strong> to get started.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
     </div>
 </div>
+
+
+<!-- ============================================================
+     ADD TRANSACTION MODAL
+     ============================================================ -->
+<div id="addTxnModal" style="display:none; position:fixed; inset:0; z-index:1000;
+     background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+     align-items: center; justify-content: center;">
+    <div style="background: var(--surface-card, #fff); border-radius: 1rem; padding: 2rem;
+                width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+                position: relative; max-height: 90vh; overflow-y: auto;">
+        <button id="closeAddModal"
+            style="position:absolute; top:1rem; right:1rem; background:none; border:none; cursor:pointer; color: var(--text-tertiary);">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" style="width:22px;height:22px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <h3 style="margin: 0 0 1.5rem 0; font-size: 1.125rem;">Add Transaction</h3>
+        <form id="addTxnForm">
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Name <span style="color:#dc2626">*</span></label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. Client ABC" required
+                    style="margin-top:0.35rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Type <span style="color:#dc2626">*</span></label>
+                <select name="type" class="form-control" style="margin-top:0.35rem;">
+                    <option value="receivable">Receivable (Money Coming In)</option>
+                    <option value="payable">Payable (Money Going Out)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Amount (₹) <span
+                        style="color:#dc2626">*</span></label>
+                <input type="number" name="amount" class="form-control" placeholder="0.00" min="0" step="0.01" required
+                    style="margin-top:0.35rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Expected Date</label>
+                <input type="date" name="expected_date" class="form-control" style="margin-top:0.35rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Mobile No.</label>
+                <input type="tel" name="mobile_no" class="form-control" placeholder="e.g. +91 98765 43210"
+                    style="margin-top:0.35rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.875rem;">Narrative</label>
+                <textarea name="narrative" class="form-control" rows="3" placeholder="Brief description..."
+                    style="margin-top:0.35rem; resize:vertical;"></textarea>
+            </div>
+            <div id="addTxnError" style="display:none; color:#dc2626; font-size:0.875rem; margin-bottom:1rem;"></div>
+            <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+                <button type="button" id="cancelAddModal" class="btn-secondary">Cancel</button>
+                <button type="submit" id="saveTxnBtn" class="btn-primary">Save Transaction</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- ============================================================
+     SETTLE MODAL
+     ============================================================ -->
+<div id="settleModal" style="display:none; position:fixed; inset:0; z-index:1000;
+     background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+     align-items: center; justify-content: center;">
+    <div style="background: var(--surface-card, #fff); border-radius: 1rem; padding: 2rem;
+                width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+                position: relative; max-height: 90vh; overflow-y: auto;">
+        <button id="closeSettleModal"
+            style="position:absolute; top:1rem; right:1rem; background:none; border:none; cursor:pointer; color: var(--text-tertiary);">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" style="width:22px;height:22px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h3 style="margin: 0 0 1.25rem 0; font-size: 1.125rem;">Settle Transaction</h3>
+
+        <!-- Pre-filled details (read-only) -->
+        <div
+            style="background: var(--surface-bg, #f9fafb); border-radius: 0.75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1.5rem;">
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Name</span><br><strong
+                    id="s_name">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Type</span><br><strong
+                    id="s_type">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Total
+                    Amount</span><br><strong id="s_amount">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Already
+                    Paid</span><br><strong id="s_paid" style="color:#16a34a;">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Remaining</span><br><strong
+                    id="s_remaining" style="color:#dc2626;">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Expected
+                    Date</span><br><strong id="s_date">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Mobile
+                    No.</span><br><strong id="s_mobile">—</strong></div>
+            <div><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Status</span><br><strong
+                    id="s_status">—</strong></div>
+            <div style="grid-column: 1/-1;"><span
+                    style="font-size:0.75rem;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Narrative</span><br><span
+                    id="s_narrative" style="font-size:0.9rem;">—</span></div>
+        </div>
+
+        <!-- Part amount input (hidden by default) -->
+        <div id="partAmountSection" style="display:none; margin-bottom:1.25rem;">
+            <label style="font-weight:600; font-size:0.875rem;">Amount to Settle Now (₹) <span
+                    style="color:#dc2626">*</span></label>
+            <input type="number" id="partAmountInput" class="form-control" placeholder="Enter partial amount" min="0.01"
+                step="0.01" style="margin-top:0.4rem;">
+            <small id="partAmountHint"
+                style="color:var(--text-tertiary); font-size:0.8rem; margin-top:0.3rem; display:block;"></small>
+        </div>
+
+        <div id="settleError" style="display:none; color:#dc2626; font-size:0.875rem; margin-bottom:1rem;"></div>
+
+        <!-- Full / Part buttons -->
+        <div style="display:flex; gap:0.75rem; justify-content:flex-end; flex-wrap:wrap;">
+            <button type="button" id="cancelSettleModal" class="btn-secondary">Cancel</button>
+            <button type="button" id="partSettleBtn" style="background:#f59e0b; color:#fff; border:none; border-radius:0.5rem;
+                           padding:0.6rem 1.25rem; font-weight:600; cursor:pointer;">
+                Part Payment
+            </button>
+            <button type="button" id="fullSettleBtn" style="background:#16a34a; color:#fff; border:none; border-radius:0.5rem;
+                           padding:0.6rem 1.25rem; font-weight:600; cursor:pointer;">
+                Full Payment
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+    (function () {
+        /* ---- ADD TRANSACTION MODAL ---- */
+        const addModal = document.getElementById('addTxnModal');
+        const openAddBtn = document.getElementById('openAddTxnModal');
+        const closeAddBtn = document.getElementById('closeAddModal');
+        const cancelAdd = document.getElementById('cancelAddModal');
+        const addForm = document.getElementById('addTxnForm');
+        const addErr = document.getElementById('addTxnError');
+        const saveTxnBtn = document.getElementById('saveTxnBtn');
+
+        function openAddModal() { addModal.style.display = 'flex'; addForm.reset(); addErr.style.display = 'none'; }
+        function closeAddModal() { addModal.style.display = 'none'; }
+
+        openAddBtn.addEventListener('click', openAddModal);
+        closeAddBtn.addEventListener('click', closeAddModal);
+        cancelAdd.addEventListener('click', closeAddModal);
+        addModal.addEventListener('click', e => { if (e.target === addModal) closeAddModal(); });
+
+        addForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            addErr.style.display = 'none';
+            saveTxnBtn.textContent = 'Saving...';
+            saveTxnBtn.disabled = true;
+            const fd = new FormData(addForm);
+            fetch('{{ url_for("enterprise.holding_payments") }}', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) { closeAddModal(); setTimeout(() => location.reload(), 200); }
+                    else { addErr.textContent = data.error || 'Something went wrong.'; addErr.style.display = 'block'; }
+                })
+                .catch(() => { addErr.textContent = 'Network error.'; addErr.style.display = 'block'; })
+                .finally(() => { saveTxnBtn.textContent = 'Save Transaction'; saveTxnBtn.disabled = false; });
+        });
+
+        /* ---- SETTLE MODAL ---- */
+        const settleModal = document.getElementById('settleModal');
+        const closeSettleBtn = document.getElementById('closeSettleModal');
+        const cancelSettle = document.getElementById('cancelSettleModal');
+        const fullBtn = document.getElementById('fullSettleBtn');
+        const partBtn = document.getElementById('partSettleBtn');
+        const partSection = document.getElementById('partAmountSection');
+        const partInput = document.getElementById('partAmountInput');
+        const partHint = document.getElementById('partAmountHint');
+        const settleErr = document.getElementById('settleError');
+        let currentTxnId = null;
+        let currentRemaining = 0;
+        let partMode = false;
+
+        function closeSettleModal() {
+            settleModal.style.display = 'none';
+            partSection.style.display = 'none';
+            settleErr.style.display = 'none';
+            partMode = false;
+            fullBtn.textContent = 'Full Payment';
+            partBtn.textContent = 'Part Payment';
+        }
+
+        document.querySelectorAll('.settle-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                currentTxnId = this.dataset.id;
+                currentRemaining = parseFloat(this.dataset.remaining) || 0;
+
+                document.getElementById('s_name').textContent = this.dataset.name || '—';
+                document.getElementById('s_type').textContent = this.dataset.type ? (this.dataset.type.charAt(0).toUpperCase() + this.dataset.type.slice(1)) : '—';
+                document.getElementById('s_amount').textContent = '₹' + parseFloat(this.dataset.amount || 0).toFixed(2);
+                document.getElementById('s_paid').textContent = '₹' + parseFloat(this.dataset.paid || 0).toFixed(2);
+                document.getElementById('s_remaining').textContent = '₹' + currentRemaining.toFixed(2);
+                document.getElementById('s_date').textContent = this.dataset.date || '—';
+                document.getElementById('s_mobile').textContent = this.dataset.mobile || '—';
+                document.getElementById('s_narrative').textContent = this.dataset.narrative || '—';
+                document.getElementById('s_status').textContent = this.dataset.status ? (this.dataset.status.charAt(0).toUpperCase() + this.dataset.status.slice(1)) : '—';
+
+                partHint.textContent = 'Remaining: ₹' + currentRemaining.toFixed(2);
+                partInput.max = currentRemaining;
+                partSection.style.display = 'none';
+                settleErr.style.display = 'none';
+                partMode = false;
+                settleModal.style.display = 'flex';
+            });
+        });
+
+        closeSettleBtn.addEventListener('click', closeSettleModal);
+        cancelSettle.addEventListener('click', closeSettleModal);
+        settleModal.addEventListener('click', e => { if (e.target === settleModal) closeSettleModal(); });
+
+        /* Part button — toggle part amount input */
+        partBtn.addEventListener('click', function () {
+            if (!partMode) {
+                partSection.style.display = 'block';
+                partInput.focus();
+                partMode = true;
+                partBtn.textContent = 'Confirm Part';
+            } else {
+                // Confirm part payment
+                const amt = parseFloat(partInput.value);
+                if (!amt || amt <= 0) {
+                    settleErr.textContent = 'Please enter a valid amount.';
+                    settleErr.style.display = 'block';
+                    return;
+                }
+                if (amt > currentRemaining) {
+                    settleErr.textContent = 'Amount cannot exceed remaining ₹' + currentRemaining.toFixed(2);
+                    settleErr.style.display = 'block';
+                    return;
+                }
+                doSettle('part', amt);
+            }
+        });
+
+        /* Full button */
+        fullBtn.addEventListener('click', function () {
+            doSettle('full', 0);
+        });
+
+        function doSettle(type, amount) {
+            settleErr.style.display = 'none';
+            fullBtn.disabled = true;
+            partBtn.disabled = true;
+
+            const fd = new FormData();
+            fd.append('txn_id', currentTxnId);
+            fd.append('settle_type', type);
+            if (type === 'part') fd.append('part_amount', amount);
+
+            fetch('{{ url_for("enterprise.settle_holding_payment") }}', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        closeSettleModal();
+                        setTimeout(() => location.reload(), 200);
+                    } else {
+                        settleErr.textContent = data.error || 'Settlement failed.';
+                        settleErr.style.display = 'block';
+                    }
+                })
+                .catch(() => {
+                    settleErr.textContent = 'Network error. Please try again.';
+                    settleErr.style.display = 'block';
+                })
+                .finally(() => {
+                    fullBtn.disabled = false;
+                    partBtn.disabled = false;
+                });
+        }
+    })();
+</script>
+
 {% endblock %}

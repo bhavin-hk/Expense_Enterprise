@@ -486,22 +486,129 @@ def add_member_fast():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@enterprise_bp.route('/holding-payments')
+# -------------------------------------------------------------------------------------
+@enterprise_bp.route('/holding-payments', methods=['GET', 'POST'])
 @enterprise_required
 def holding_payments():
-    return render_template('enterprise/holding_payments.html')
+    org_id = session.get('curr_org_id')
+    db_service = get_db_service(session.get('access_token'))
+    user_id = session['user']
 
-@enterprise_bp.route('/investments')
+    if request.method == 'POST':
+        # Handle Add Transaction via AJAX
+        data = {
+            'name': request.form.get('name', '').strip(),
+            'type': request.form.get('type', 'receivable'),
+            'amount': request.form.get('amount', 0),
+            'expected_date': request.form.get('expected_date', '').strip() or None,
+            'mobile_no': request.form.get('mobile_no', '').strip(),
+            'narrative': request.form.get('narrative', '').strip(),
+        }
+        if not data['name'] or not data['amount']:
+            return jsonify({'success': False, 'error': 'Name and Amount are required.'}), 400
+        try:
+            ok = db_service.add_holding_payment(org_id, user_id, data)
+            if ok:
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': 'Failed to save transaction.'}), 500
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # GET — load transactions and compute KPIs
+    try:
+        transactions = db_service.get_holding_payments(org_id)
+    except Exception as e:
+        flash(f"Error loading holding payments: {str(e)}", "error")
+        transactions = []
+
+    total_receivable = sum(Decimal(str(t.get('amount') or 0)) for t in transactions if t.get('type') == 'receivable')
+    total_payable    = sum(Decimal(str(t.get('amount') or 0)) for t in transactions if t.get('type') == 'payable')
+    net_holding      = total_receivable - total_payable
+
+    kpis = {
+        'total_receivable': f"{total_receivable:,.2f}",
+        'total_payable':    f"{total_payable:,.2f}",
+        'net_holding':      f"{net_holding:,.2f}",
+        'net_positive':     net_holding >= 0,
+    }
+
+    return render_template('enterprise/holding_payments.html',
+                           transactions=transactions, kpis=kpis)
+
+
+@enterprise_bp.route('/holding-payments/settle', methods=['POST'])
+@enterprise_required
+def settle_holding_payment():
+    org_id = session.get('curr_org_id')
+    db_service = get_db_service(session.get('access_token'))
+
+    txn_id      = request.form.get('txn_id', '').strip()
+    settle_type = request.form.get('settle_type', 'full')   # 'full' or 'part'
+    part_amount = 0.0
+
+    if settle_type == 'part':
+        try:
+            part_amount = float(request.form.get('part_amount', 0))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid partial amount.'}), 400
+        if part_amount <= 0:
+            return jsonify({'success': False, 'error': 'Partial amount must be greater than zero.'}), 400
+
+    if not txn_id:
+        return jsonify({'success': False, 'error': 'Transaction ID is required.'}), 400
+
+    try:
+        result = db_service.settle_holding_payment(txn_id, org_id, settle_type, part_amount)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+# ------------------------------------------------------------------------------
+
+
+@enterprise_bp.route('/investments', methods=['GET', 'POST'])
 @enterprise_required
 def investments():
     org_id = session.get('curr_org_id')
     db_service = get_db_service(session.get('access_token'))
+
+    if request.method == 'POST':
+        data = {
+            'date':      request.form.get('date', '').strip(),
+            'type':      request.form.get('type', 'investment'),
+            'taken_by':  request.form.get('taken_by', '').strip(),
+            'narrative': request.form.get('narrative', '').strip(),
+            'amount':    request.form.get('amount', 0),
+        }
+        if not data['date'] or not data['amount']:
+            return jsonify({'success': False, 'error': 'Date and Amount are required.'}), 400
+        try:
+            ok = db_service.add_investment(org_id, data)
+            if ok:
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': 'Failed to save entry.'}), 500
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     try:
         investments_list = db_service.get_investments(org_id)
-        return render_template('enterprise/investments.html', investments_list=investments_list)
     except Exception as e:
         flash(f"Error loading investments: {str(e)}", "error")
-        return redirect(url_for('enterprise.ent_dashboard'))
+        investments_list = []
+
+    total_investment = sum(Decimal(str(i.get('amount') or 0)) for i in investments_list if i.get('type', 'investment') == 'investment')
+    total_withdraw   = sum(Decimal(str(i.get('amount') or 0)) for i in investments_list if i.get('type') == 'withdraw')
+    net_capital      = total_investment - total_withdraw
+
+    kpis = {
+        'total_investment': f"{total_investment:,.2f}",
+        'total_withdraw':   f"{total_withdraw:,.2f}",
+        'net_capital':      f"{net_capital:,.2f}",
+        'net_positive':     net_capital >= 0,
+    }
+
+    return render_template('enterprise/investments.html',
+                           investments_list=investments_list, kpis=kpis)
+# -------------------------------------------------------------------------------------
 
 @enterprise_bp.route('/export/<format>')
 @enterprise_required

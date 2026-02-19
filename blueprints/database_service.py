@@ -72,6 +72,15 @@ class BaseService:
 
     def get_categories(self, user_id: str) -> List[str]:
         raise NotImplementedError
+    # added below:
+    def get_holding_payments(self, org_id: str) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def add_holding_payment(self, org_id: str, user_id: str, data: dict) -> bool:
+        raise NotImplementedError
+
+    def settle_holding_payment(self, txn_id: str, org_id: str, settle_type: str, part_amount: float = 0) -> dict:
+        raise NotImplementedError
 
     # Enterprise Credentials
     def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
@@ -209,6 +218,81 @@ class SupabaseService(BaseService):
             }).execute()
             return True
         except:
+            return False
+
+    #added:
+
+    def get_holding_payments(self, org_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = self.db.table('ent_holding_payments').select('*').eq('organization_id', org_id).order('created_at', desc=True).execute()
+            return res.data or []
+        except Exception as e:
+            print(f"Error fetching holding payments: {e}")
+            return []
+
+    def add_holding_payment(self, org_id: str, user_id: str, data: dict) -> bool:
+        try:
+            self.db.table('ent_holding_payments').insert({
+                'organization_id': org_id,
+                'created_by': user_id,
+                'name': data.get('name'),
+                'type': data.get('type', 'receivable'),
+                'amount': float(data.get('amount', 0)),
+                'expected_date': data.get('expected_date') or None,
+                'mobile_no': data.get('mobile_no'),
+                'narrative': data.get('narrative'),
+                'status': 'pending',
+                'paid_amount': 0,
+                'remaining_amount': float(data.get('amount', 0))
+            }).execute()
+            return True
+        except Exception as e:
+            print(f"Error adding holding payment: {e}")
+            return False
+
+    def settle_holding_payment(self, txn_id: str, org_id: str, settle_type: str, part_amount: float = 0) -> dict:
+        try:
+            res = self.db.table('ent_holding_payments').select('*').eq('id', txn_id).eq('organization_id', org_id).single().execute()
+            if not res.data:
+                return {'success': False, 'error': 'Transaction not found.'}
+            txn = res.data
+            original = float(txn.get('amount', 0))
+            paid_so_far = float(txn.get('paid_amount', 0))
+
+            if settle_type == 'full':
+                new_paid = original
+                new_remaining = 0
+                new_status = 'settled'
+            else:
+                new_paid = paid_so_far + part_amount
+                new_remaining = max(original - new_paid, 0)
+                new_status = 'settled' if new_remaining == 0 else 'partial'
+
+            self.db.table('ent_holding_payments').update({
+                'paid_amount': new_paid,
+                'remaining_amount': new_remaining,
+                'status': new_status
+            }).eq('id', txn_id).execute()
+            return {'success': True, 'status': new_status, 'paid': new_paid, 'remaining': new_remaining}
+        except Exception as e:
+            print(f"Error settling holding payment: {e}")
+            return {'success': False, 'error': str(e)} 
+
+    def add_investment(self, org_id: str, data: dict) -> bool:
+        try:
+            self.db.table('ent_investments').insert({
+                'organization_id': org_id,
+                'amount': float(data.get('amount', 0)),
+                'date': data.get('date'),
+                'type': data.get('type', 'investment'),
+                'taken_by': data.get('taken_by', '').strip() or None,
+                'narrative': data.get('narrative', '').strip() or None,
+                'source': data.get('taken_by', '').strip() or None,
+                'description': data.get('narrative', '').strip() or None,
+            }).execute()
+            return True
+        except Exception as e:
+            print(f"Error adding investment: {e}")
             return False
 
     # Enterprise Credentials — dummy (local-only feature)
@@ -531,6 +615,104 @@ class PostgresService(BaseService):
             return True
         except:
             return False
+
+# added
+
+    def add_investment(self, org_id: str, data: dict) -> bool:
+        query = """
+            INSERT INTO ent_investments
+                (organization_id, amount, date, type, taken_by, narrative, source, description)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        try:
+            taken_by  = data.get('taken_by', '').strip() or None
+            narrative = data.get('narrative', '').strip() or None
+            self._execute_query(query, (
+                org_id,
+                float(data.get('amount', 0)),
+                data.get('date'),
+                data.get('type', 'investment'),
+                taken_by,
+                narrative,
+                taken_by,
+                narrative,
+            ), fetch=False)
+            return True
+        except Exception as e:
+            print(f"Error adding investment: {e}")
+            return False
+
+
+    def get_holding_payments(self, org_id: str) -> List[Dict[str, Any]]:
+        query = """
+            SELECT id, name, type, amount,
+                   COALESCE(paid_amount, 0) AS paid_amount,
+                   COALESCE(remaining_amount, amount) AS remaining_amount,
+                   expected_date, mobile_no, narrative, status, created_at
+            FROM ent_holding_payments
+            WHERE organization_id = %s
+            ORDER BY created_at DESC
+        """
+        try:
+            return self._execute_query(query, (org_id,))
+        except Exception as e:
+            print(f"Error fetching holding payments: {e}")
+            return []
+
+
+    def add_holding_payment(self, org_id: str, user_id: str, data: dict) -> bool:
+        query = """
+            INSERT INTO ent_holding_payments
+                (organization_id, created_by, name, type, amount, expected_date, mobile_no, narrative, status, paid_amount, remaining_amount)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', 0, %s)
+        """
+        try:
+            amt = float(data.get('amount', 0))
+            self._execute_query(query, (
+                org_id, user_id,
+                data.get('name'),
+                data.get('type', 'receivable'),
+                amt,
+                data.get('expected_date') or None,
+                data.get('mobile_no'),
+                data.get('narrative'),
+                amt
+            ), fetch=False)
+            return True
+        except Exception as e:
+            print(f"Error adding holding payment: {e}")
+            return False
+
+    def settle_holding_payment(self, txn_id: str, org_id: str, settle_type: str, part_amount: float = 0) -> dict:
+        try:
+            res = self._execute_query(
+                "SELECT amount, paid_amount, remaining_amount FROM ent_holding_payments WHERE id = %s AND organization_id = %s",
+                (txn_id, org_id)
+            )
+            if not res:
+                return {'success': False, 'error': 'Transaction not found.'}
+            txn = res[0]
+            original    = float(txn.get('amount', 0))
+            paid_so_far = float(txn.get('paid_amount', 0) or 0)
+
+            if settle_type == 'full':
+                new_paid      = original
+                new_remaining = 0
+                new_status    = 'settled'
+            else:
+                new_paid      = paid_so_far + part_amount
+                new_remaining = max(original - new_paid, 0)
+                new_status    = 'settled' if new_remaining == 0 else 'partial'
+
+            self._execute_query(
+                "UPDATE ent_holding_payments SET paid_amount=%s, remaining_amount=%s, status=%s WHERE id=%s",
+                (new_paid, new_remaining, new_status, txn_id), fetch=False
+            )
+            return {'success': True, 'status': new_status, 'paid': new_paid, 'remaining': new_remaining}
+        except Exception as e:
+            print(f"Error settling holding payment: {e}")
+            return {'success': False, 'error': str(e)}
+
 
     # Enterprise Credentials
     def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
