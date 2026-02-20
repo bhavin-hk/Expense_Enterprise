@@ -6,105 +6,449 @@
     <a href="{{ url_for('dashboard') }}" class="btn-secondary">Back to Dashboard</a>
 </div>
 
-<div class="grid-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-top: 2rem;">
-    <!-- Pie Chart (Expenses) -->
-    <div class="card">
-        <h3>Expenses by Category</h3>
+<!-- ── Charts ──────────────────────────────────────────────────── -->
+<div class="grid-container"
+    style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:2rem;margin-top:2rem;">
+    <div class="rpt-card">
+        <h3>Personal Expenses by Category</h3>
         <canvas id="expenseCategoryChart"></canvas>
     </div>
-
-    <!-- Pie Chart (Income) -->
-    <div class="card">
-        <h3>Income by Category</h3>
+    <div class="rpt-card">
+        <h3>Personal Income by Category</h3>
         <canvas id="incomeCategoryChart"></canvas>
     </div>
-    
-    <!-- Bar Chart -->
-    <div class="card" style="grid-column: 1 / -1;">
-        <h3>Monthly Activity (Income vs Expenses)</h3>
+    <div class="rpt-card" style="grid-column:1/-1;">
+        <h3>Monthly Activity — Income vs Expenses</h3>
         <canvas id="monthlyChart"></canvas>
     </div>
 </div>
 
+<!-- ── Sticky Filter Bar ──────────────────────────────────────── -->
+<form method="GET" action="{{ url_for('reports') }}" id="filterForm">
+    <div class="filter-bar">
+        <!-- Time Period -->
+        <div class="filter-group">
+            <label for="period">Time Period</label>
+            <select name="period" id="period" onchange="toggleCustom(this.value)">
+                <option value="this_month" {% if f_period=='this_month' %}selected{% endif %}>This Month</option>
+                <option value="last_3_months" {% if f_period=='last_3_months' %}selected{% endif %}>Last 3 Months
+                </option>
+                <option value="ytd" {% if f_period=='ytd' %}selected{% endif %}>Year to Date</option>
+                <option value="custom" {% if f_period=='custom' %}selected{% endif %}>Custom</option>
+            </select>
+        </div>
+        <!-- Custom Dates (hidden unless custom) -->
+        <div class="filter-group custom-dates" id="customDates"
+            style="display:{% if f_period=='custom' %}flex{% else %}none{% endif %};">
+            <div>
+                <label for="start_date">From</label>
+                <input type="date" name="start_date" id="start_date" value="{{ f_custom_start }}">
+            </div>
+            <div>
+                <label for="end_date">To</label>
+                <input type="date" name="end_date" id="end_date" value="{{ f_custom_end }}">
+            </div>
+        </div>
+        <!-- Category -->
+        <div class="filter-group">
+            <label for="category">Category</label>
+            <select name="category" id="category">
+                <option value="all" {% if f_category=='all' %}selected{% endif %}>All Categories</option>
+                {% for cat in all_categories %}
+                <option value="{{ cat }}" {% if f_category==cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <!-- Payment Method -->
+        <div class="filter-group">
+            <label for="payment_method">Payment Method</label>
+            <select name="payment_method" id="payment_method">
+                <option value="all" {% if f_payment=='all' %}selected{% endif %}>All</option>
+                <option value="cash" {% if f_payment=='cash' %}selected{% endif %}>💵 Cash</option>
+                <option value="bank" {% if f_payment=='bank' %}selected{% endif %}>🏦 Personal Bank</option>
+            </select>
+        </div>
+        <!-- Transaction Type -->
+        <div class="filter-group">
+            <label for="tx_type">Type</label>
+            <select name="tx_type" id="tx_type">
+                <option value="all" {% if f_tx_type=='all' %}selected{% endif %}>All</option>
+                <option value="income" {% if f_tx_type=='income' %}selected{% endif %}>Income</option>
+                <option value="expense" {% if f_tx_type=='expense' %}selected{% endif %}>Expense</option>
+            </select>
+        </div>
+        <div class="filter-group" style="align-self:flex-end;">
+            <button type="submit" class="btn-primary">Apply Filters</button>
+        </div>
+    </div>
+</form>
+
+<!-- ── Summary Mini-Cards ──────────────────────────────────────── -->
+<div class="mini-cards">
+    <div class="mini-card income-card">
+        <span class="mini-label">Personal Income</span>
+        <span class="mini-value">{{ currency }}{{ "%.2f"|format(total_income) }}</span>
+    </div>
+    <div class="mini-card expense-card">
+        <span class="mini-label">Personal Expenses</span>
+        <span class="mini-value">{{ currency }}{{ "%.2f"|format(total_expense) }}</span>
+    </div>
+    <div class="mini-card {% if net_savings >= 0 %}savings-pos{% else %}savings-neg{% endif %}">
+        <span class="mini-label">Pocket Savings</span>
+        <span class="mini-value">{{ currency }}{{ "%.2f"|format(net_savings) }}</span>
+    </div>
+</div>
+
+<!-- ── Transaction Detail Table ────────────────────────────────── -->
+<div class="rpt-card" style="margin-top:1.5rem;">
+    <h3>
+        Transactions
+        <span class="badge">{{ transactions|length }}</span>
+    </h3>
+    {% if transactions %}
+    <div class="table-wrap">
+        <table class="rpt-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Payment Method</th>
+                    <th style="text-align:right;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                <tr class="{% if loop.index is divisibleby 2 %}row-alt{% endif %}">
+                    <td data-label="Date">{{ tx.date }}</td>
+                    <td data-label="Category">
+                        <span class="cat-pill">{{ tx.category }}</span>
+                    </td>
+                    <td data-label="Description" class="desc-cell">{{ tx.description or '—' }}</td>
+                    <td data-label="Payment">
+                        {% if tx.payment_method == 'Cash' %}💵{% else %}🏦{% endif %}
+                        {{ tx.payment_method }}
+                    </td>
+                    <td data-label="Amount" style="text-align:right;">
+                        <span class="{% if tx.type == 'income' %}amt-income{% else %}amt-expense{% endif %}">
+                            {% if tx.type == 'income' %}+{% else %}−{% endif %}{{ currency }}{{ "%.2f"|format(tx.amount)
+                            }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" style="opacity:.35;margin-bottom:.75rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M3.75 9A2.25 2.25 0 016 6.75h12A2.25 2.25 0 0120.25 9v9A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V9zm0 0L12 3.75 20.25 9" />
+        </svg>
+        <p>No transactions found for this period.</p>
+        <span>Try adjusting your filters or selecting a wider date range.</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Charts JS ───────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Expense Category Pie Chart
-    const ctxExpPie = document.getElementById('expenseCategoryChart').getContext('2d');
-    new Chart(ctxExpPie, {
+    // Expense Category Pie
+    new Chart(document.getElementById('expenseCategoryChart').getContext('2d'), {
         type: 'pie',
         data: {
             labels: {{ exp_pie_labels | tojson }},
-            datasets: [{
-                data: {{ exp_pie_values | tojson }},
-                backgroundColor: [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#E7E9ED', '#71B37C'
-                ]
-            }]
+        datasets: [{ data: {{ exp_pie_values | tojson }},
+        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#71B37C', '#E55353'] }]
         },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { position: 'bottom' }
-            }
-        }
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
     });
 
-    // Income Category Pie Chart
-    const ctxIncPie = document.getElementById('incomeCategoryChart').getContext('2d');
-    new Chart(ctxIncPie, {
+    // Income Category Pie
+    new Chart(document.getElementById('incomeCategoryChart').getContext('2d'), {
         type: 'pie',
         data: {
             labels: {{ inc_pie_labels | tojson }},
-            datasets: [{
-                data: {{ inc_pie_values | tojson }},
-                backgroundColor: [
-                    '#4BC0C0', '#36A2EB', '#FFCE56', '#9966FF', '#FF9F40'
-                ]
-            }]
+        datasets: [{ data: {{ inc_pie_values | tojson }},
+        backgroundColor: ['#4BC0C0', '#36A2EB', '#FFCE56', '#9966FF', '#FF9F40', '#71B37C'] }]
         },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { position: 'bottom' }
-            }
-        }
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
     });
 
-    // Monthly Bar Chart (Grouped)
-    const ctxBar = document.getElementById('monthlyChart').getContext('2d');
-    new Chart(ctxBar, {
+    // Monthly Bar Chart
+    new Chart(document.getElementById('monthlyChart').getContext('2d'), {
         type: 'bar',
         data: {
             labels: {{ bar_labels | tojson }},
-            datasets: [
-                {
-                    label: 'Income',
-                    data: {{ bar_inc | tojson }},
-                    backgroundColor: '#4BC0C0'
-                },
-                {
-                    label: 'Expenses',
-                    data: {{ bar_exp | tojson }},
-                    backgroundColor: '#FF6384'
-                }
-            ]
+        datasets: [
+        { label: 'Income', data: {{ bar_inc | tojson }}, backgroundColor: 'rgba(75,192,192,0.8)', borderRadius: 4 },
+        { label: 'Expenses', data: {{ bar_exp | tojson }}, backgroundColor: 'rgba(255,99,132,0.8)', borderRadius: 4 }
+    ]
         },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
     });
+
+    // Show/hide custom date pickers
+    function toggleCustom(val) {
+        document.getElementById('customDates').style.display = val === 'custom' ? 'flex' : 'none';
+    }
 </script>
 
 <style>
-    .card {
-        background: white;
+    /* ── Base card ── */
+    .rpt-card {
+        background: var(--card-bg, #fff);
         padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, .08);
+        margin-bottom: 1rem;
     }
-    h3 { margin-top: 0; margin-bottom: 1rem; color: #333; }
+
+    .rpt-card h3 {
+        margin: 0 0 1rem;
+        color: var(--text-primary, #1a1a2e);
+        font-size: 1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-start;
+        background: var(--card-bg, #fff);
+        padding: 1.2rem 1.5rem;
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, .08);
+        margin: 1.5rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: .35rem;
+        min-width: 140px;
+    }
+
+    .filter-group label {
+        font-size: .75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--text-secondary, #666);
+    }
+
+    .filter-group select,
+    .filter-group input[type="date"] {
+        padding: .45rem .7rem;
+        border: 1.5px solid var(--border, #e2e8f0);
+        border-radius: 8px;
+        font-size: .875rem;
+        background: var(--input-bg, #f8fafc);
+        color: var(--text-primary, #1a1a2e);
+        cursor: pointer;
+    }
+
+    .custom-dates {
+        flex-direction: row;
+        gap: .5rem;
+        align-items: flex-end;
+    }
+
+    /* ── Mini-cards ── */
+    .mini-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: .5rem;
+    }
+
+    .mini-card {
+        padding: 1.1rem 1.4rem;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .07);
+    }
+
+    .income-card {
+        background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+        border-left: 4px solid #10b981;
+    }
+
+    .expense-card {
+        background: linear-gradient(135deg, #fee2e2, #fecaca);
+        border-left: 4px solid #ef4444;
+    }
+
+    .savings-pos {
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        border-left: 4px solid #3b82f6;
+    }
+
+    .savings-neg {
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border-left: 4px solid #f59e0b;
+    }
+
+    .mini-label {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        opacity: .7;
+    }
+
+    .mini-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--text-primary, #1a1a2e);
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+        overflow-x: auto;
+    }
+
+    .rpt-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .875rem;
+    }
+
+    .rpt-table th {
+        text-align: left;
+        padding: .65rem 1rem;
+        background: var(--table-header, #f1f5f9);
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--text-secondary, #64748b);
+        white-space: nowrap;
+    }
+
+    .rpt-table td {
+        padding: .7rem 1rem;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        vertical-align: middle;
+    }
+
+    .row-alt td {
+        background: var(--row-alt, #f8fafc);
+    }
+
+    .rpt-table tr:hover td {
+        background: var(--hover-bg, #f0f4f8);
+    }
+
+    .amt-income {
+        color: #059669;
+        font-weight: 700;
+    }
+
+    .amt-expense {
+        color: #dc2626;
+        font-weight: 700;
+    }
+
+    .cat-pill {
+        display: inline-block;
+        padding: .2rem .55rem;
+        background: var(--pill-bg, #e2e8f0);
+        border-radius: 20px;
+        font-size: .75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .desc-cell {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text-secondary, #64748b);
+    }
+
+    .badge {
+        background: #6366f1;
+        color: #fff;
+        border-radius: 20px;
+        padding: .1rem .55rem;
+        font-size: .72rem;
+        font-weight: 700;
+        margin-left: .4rem;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-secondary, #64748b);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .empty-state p {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: .5rem 0 .25rem;
+    }
+
+    .empty-state span {
+        font-size: .85rem;
+    }
+
+    /* ── Mobile card layout ── */
+    @media (max-width: 600px) {
+        .rpt-table thead {
+            display: none;
+        }
+
+        .rpt-table tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: 10px;
+            padding: .5rem;
+        }
+
+        .rpt-table td {
+            display: flex;
+            justify-content: space-between;
+            padding: .45rem .75rem;
+            border: none;
+            border-bottom: 1px solid var(--border, #e2e8f0);
+        }
+
+        .rpt-table td:last-child {
+            border-bottom: none;
+        }
+
+        .rpt-table td::before {
+            content: attr(data-label);
+            font-weight: 700;
+            font-size: .75rem;
+            text-transform: uppercase;
+            color: var(--text-secondary, #64748b);
+        }
+
+        .desc-cell {
+            max-width: unset;
+            white-space: normal;
+        }
+    }
 </style>
 {% endblock %}

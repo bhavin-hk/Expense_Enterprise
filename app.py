@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from flask_mail import Mail, Message
 from utils import generate_pdf_report, send_email_report
 from blueprints.enterprise import enterprise_bp
-from blueprints.database_service import get_db_service
+from blueprints.database_service import get_db_service, SupabaseService, get_supabase_client
 
 load_dotenv()
 
@@ -985,47 +985,120 @@ def reports():
     if 'user' not in session: return redirect(url_for('login'))
     try:
         token = session.get('access_token')
-        transactions = get_db(token).table('expenses').select('*').eq('user_id', session['user']).execute().data
-        
-        monthly_data = {}
-        exp_categories = {}
-        inc_categories = {}
-        
-        for tx in transactions:
-            m = tx['date'][:7]
-            if m not in monthly_data: monthly_data[m] = {'income': 0, 'expense': 0}
-            
+        user_id = session['user']
+
+        # ── Read filter params (state persistence) ──
+        period         = request.args.get('period', 'this_month')
+        cat_filter     = request.args.get('category', 'all')
+        payment_filter = request.args.get('payment_method', 'all')
+        type_filter    = request.args.get('tx_type', 'all')
+        custom_start   = request.args.get('start_date', '')
+        custom_end     = request.args.get('end_date', '')
+
+        # ── Resolve date range ──
+        today = datetime.date.today()
+        if period == 'this_month':
+            start_date = today.replace(day=1).strftime('%Y-%m-%d')
+            end_date   = today.strftime('%Y-%m-%d')
+        elif period == 'last_3_months':
+            m = today.month - 3
+            y = today.year + (m - 1) // 12
+            m = ((m - 1) % 12) + 1
+            start_date = today.replace(year=y, month=m, day=1).strftime('%Y-%m-%d')
+            end_date   = today.strftime('%Y-%m-%d')
+        elif period == 'ytd':
+            start_date = today.replace(month=1, day=1).strftime('%Y-%m-%d')
+            end_date   = today.strftime('%Y-%m-%d')
+        elif period == 'custom' and custom_start:
+            start_date = custom_start
+            end_date   = custom_end or today.strftime('%Y-%m-%d')
+        else:
+            start_date = today.replace(day=1).strftime('%Y-%m-%d')
+            end_date   = today.strftime('%Y-%m-%d')
+
+        # ── Fetch all transactions (for charts — always from Supabase: personal data) ──
+        # Personal transactions ALWAYS live in Supabase regardless of DB_BACKEND
+        sb_svc = SupabaseService(get_db(token))
+        all_txns = sb_svc.get_personal_transactions(user_id, {
+            'start_date': None, 'end_date': None,
+        })
+
+        # ── Build chart data from personal transactions only ──
+        monthly_data, exp_categories, inc_categories = {}, {}, {}
+        for tx in all_txns:
+            m   = str(tx['date'])[:7]
             cat = tx.get('category', 'Uncategorized')
-            amt = tx.get('amount', 0)
-            
+            amt = float(tx.get('amount', 0))
+            if m not in monthly_data: monthly_data[m] = {'income': 0, 'expense': 0}
             if tx['type'] == 'income':
                 monthly_data[m]['income'] += amt
                 inc_categories[cat] = inc_categories.get(cat, 0) + amt
             else:
                 monthly_data[m]['expense'] += amt
                 exp_categories[cat] = exp_categories.get(cat, 0) + amt
-            
-        bar_labels = sorted(monthly_data.keys())
-        bar_exp = [monthly_data[m]['expense'] for m in bar_labels]
-        bar_inc = [monthly_data[m]['income'] for m in bar_labels]
-        
-        exp_pie_labels = list(exp_categories.keys())
-        exp_pie_values = list(exp_categories.values())
-        
-        inc_pie_labels = list(inc_categories.keys())
-        inc_pie_values = list(inc_categories.values())
-        
-        prof = get_db(token).table('profiles').select('currency').eq('id', session['user']).execute()
+
+        bar_labels      = sorted(monthly_data.keys())
+        bar_exp         = [monthly_data[m]['expense'] for m in bar_labels]
+        bar_inc         = [monthly_data[m]['income']  for m in bar_labels]
+        exp_pie_labels  = list(exp_categories.keys())
+        exp_pie_values  = list(exp_categories.values())
+        inc_pie_labels  = list(inc_categories.keys())
+        inc_pie_values  = list(inc_categories.values())
+
+        # ── Fetch filtered transactions for the table ──
+        filters = {
+            'start_date':     start_date,
+            'end_date':       end_date,
+            'category':       cat_filter,
+            'payment_method': payment_filter,
+            'tx_type':        type_filter,
+        }
+        transactions = sb_svc.get_personal_transactions(user_id, filters)
+
+        # ── Mini-card totals ──
+        total_income  = sum(t['amount'] for t in transactions if t['type'] == 'income')
+        total_expense = sum(t['amount'] for t in transactions if t['type'] != 'income')
+        net_savings   = total_income - total_expense
+
+        # ── Category list for dropdown ──
+        all_categories = sb_svc.get_categories(user_id)
+
+        # ── Currency ──
+        prof = get_db(token).table('profiles').select('currency').eq('id', user_id).execute()
         currency = prof.data[0]['currency'] if prof.data else '₹'
-        
+
+        # ── Collect personal banks for filter dropdown ──
+        banks_res = get_db(token).table('bank_accounts').select('id, bank_name').eq('user_id', user_id).execute()
+        personal_banks = banks_res.data or []
+
     except Exception as e:
-        print(f"Reports error: {e}")
-        bar_labels, bar_exp, bar_inc, currency = [], [], [], '₹'
+        import traceback; traceback.print_exc()
+        bar_labels = bar_exp = bar_inc = []
         exp_pie_labels = exp_pie_values = inc_pie_labels = inc_pie_values = []
-    
-    return render_template('reports.html', exp_pie_labels=exp_pie_labels, exp_pie_values=exp_pie_values,
-                           inc_pie_labels=inc_pie_labels, inc_pie_values=inc_pie_values,
-                           bar_labels=bar_labels, bar_exp=bar_exp, bar_inc=bar_inc, currency=currency)
+        transactions = []
+        total_income = total_expense = net_savings = 0
+        all_categories = []
+        currency = '₹'
+        personal_banks = []
+        period = 'this_month'
+        start_date = end_date = ''
+        cat_filter = payment_filter = type_filter = 'all'
+        custom_start = custom_end = ''
+
+    return render_template('reports.html',
+        exp_pie_labels=exp_pie_labels, exp_pie_values=exp_pie_values,
+        inc_pie_labels=inc_pie_labels, inc_pie_values=inc_pie_values,
+        bar_labels=bar_labels, bar_exp=bar_exp, bar_inc=bar_inc,
+        currency=currency,
+        transactions=transactions,
+        total_income=total_income, total_expense=total_expense, net_savings=net_savings,
+        all_categories=all_categories,
+        personal_banks=personal_banks,
+        # filter state for persistence
+        f_period=period, f_category=cat_filter, f_payment=payment_filter,
+        f_tx_type=type_filter, f_start=start_date, f_end=end_date,
+        f_custom_start=custom_start, f_custom_end=custom_end,
+    )
 
 
 @app.route('/export_pdf')
@@ -1120,6 +1193,32 @@ def debts():
     except:
         lent_list, borrowed_list, banks, currency = [], [], [], '₹'
     return render_template('debts.html', lent_list=lent_list, borrowed_list=borrowed_list, banks=banks, currency=currency, today=datetime.date.today())
+
+@app.route('/settle_debt/<debt_id>', methods=['POST'])
+def settle_debt(debt_id):
+    if 'user' not in session: return redirect(url_for('login'))
+    token = session.get('access_token')
+    try:
+        res = get_db(token).table('debts').select('*').eq('id', debt_id).eq('user_id', session['user']).execute()
+        if not res.data:
+            flash("Debt not found.", "error")
+            return redirect(url_for('debts'))
+        debt = res.data[0]
+        amt, dtype, name = debt['amount'], debt['type'], debt['person_name']
+        bid = request.form.get('bank_account_id')
+        get_db(token).table('debts').update({'status': 'settled'}).eq('id', debt_id).execute()
+        tx_type = 'income' if dtype == 'lend' else 'expense'
+        desc = f"Settled: {'Received from' if dtype == 'lend' else 'Paid back to'} {name}"
+        get_db(token).table('expenses').insert({
+            'user_id': session['user'], 'date': str(datetime.date.today()),
+            'category': 'Debt Settlement', 'amount': amt,
+            'description': desc, 'type': tx_type,
+            'bank_account_id': bid if bid else None
+        }).execute()
+        flash("Debt settled successfully.", "success")
+    except Exception as e:
+        flash(f"Error settling debt: {e}", "error")
+    return redirect(url_for('debts'))
 
 
 # ---------------------------------------------------------

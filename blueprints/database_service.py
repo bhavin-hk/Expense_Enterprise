@@ -98,7 +98,6 @@ class BaseService:
     def settle_holding_payment(self, txn_id: str, org_id: str, settle_type: str, part_amount: float = 0) -> dict:
         raise NotImplementedError
 
-    # Enterprise Credentials
     def get_business_credentials(self, user_id: str, business_name: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
@@ -106,6 +105,12 @@ class BaseService:
         raise NotImplementedError
 
     def verify_business_email(self, token: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def add_investment(self, org_id: str, data: dict) -> bool:
+        raise NotImplementedError
+
+    def get_user_businesses(self, user_id: str) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
 DEFAULT_CATEGORIES = [
@@ -269,7 +274,53 @@ class SupabaseService(BaseService):
         except:
             return False
 
-    #added:
+    def get_personal_transactions(self, user_id: str, filters: dict) -> List[Dict[str, Any]]:
+        """Fetch filtered personal transactions strictly from Supabase (personal data only)."""
+        try:
+            query = self.db.table('expenses').select(
+                'id, date, category, description, amount, type, bank_account_id, bank_accounts(bank_name)'
+            ).eq('user_id', user_id)
+
+            # Date range
+            if filters.get('start_date'):
+                query = query.gte('date', filters['start_date'])
+            if filters.get('end_date'):
+                query = query.lte('date', filters['end_date'])
+
+            # Category filter
+            if filters.get('category') and filters['category'] != 'all':
+                query = query.eq('category', filters['category'])
+
+            # Transaction type filter (income / expense)
+            if filters.get('tx_type') and filters['tx_type'] != 'all':
+                query = query.eq('type', filters['tx_type'])
+
+            # Payment method (cash = no bank_account_id, bank = has bank_account_id)
+            if filters.get('payment_method') == 'cash':
+                query = query.is_('bank_account_id', 'null')
+            elif filters.get('payment_method') == 'bank':
+                query = query.not_.is_('bank_account_id', 'null')
+
+            res = query.order('date', desc=True).execute()
+            rows = []
+            for r in (res.data or []):
+                bank_name = None
+                if r.get('bank_accounts') and isinstance(r['bank_accounts'], dict):
+                    bank_name = r['bank_accounts'].get('bank_name')
+                rows.append({
+                    'id':             r.get('id'),
+                    'date':           r.get('date', ''),
+                    'category':       r.get('category', 'Uncategorized'),
+                    'description':    r.get('description', ''),
+                    'amount':         float(r.get('amount', 0)),
+                    'type':           r.get('type', 'expense'),
+                    'payment_method': bank_name if bank_name else 'Cash',
+                })
+            return rows
+        except Exception as e:
+            print(f"get_personal_transactions error: {e}")
+            return []
+
 
     def get_holding_payments(self, org_id: str) -> List[Dict[str, Any]]:
         try:
@@ -353,6 +404,14 @@ class SupabaseService(BaseService):
 
     def verify_business_email(self, token: str) -> Optional[Dict[str, Any]]:
         return None
+
+    def add_investment(self, org_id: str, data: dict) -> bool:
+        # Investment recording is local-only (PostgreSQL)
+        return False
+
+    def get_user_businesses(self, user_id: str) -> List[Dict[str, Any]]:
+        # Business discovery via Supabase not yet implemented
+        return []
 
 class PostgresService(BaseService):
     _pool = None
@@ -565,14 +624,33 @@ class PostgresService(BaseService):
         return self._execute_query(query, (user_id,))
 
     def get_enterprise_banks(self, user_id: str) -> List[Dict[str, Any]]:
-        """Fetch enterprise (Current/CC/OD) accounts from local PostgreSQL."""
-        query = "SELECT * FROM enterprise_bank_accounts WHERE user_id = %s ORDER BY created_at DESC"
+        """Fetch enterprise (Current/CC/OD) accounts from local PostgreSQL with computed current_balance."""
+        query = """
+            SELECT b.*,
+                   COALESCE(b.opening_balance, 0)
+                   + COALESCE((SELECT SUM(amount) FROM ent_revenue r WHERE r.bank_account_id = b.id), 0)
+                   - COALESCE((SELECT SUM(amount) FROM ent_expenses e WHERE e.bank_account_id = b.id), 0)
+                   AS current_balance
+            FROM enterprise_bank_accounts b
+            WHERE b.user_id = %s 
+            ORDER BY b.created_at DESC
+        """
         return self._execute_query(query, (user_id,))
 
     def get_banks_for_org(self, user_id: str, org_name: str) -> List[Dict[str, Any]]:
-        """Return enterprise bank accounts scoped to the active business name (org_name from session)."""
-        query = "SELECT * FROM enterprise_bank_accounts WHERE user_id = %s AND business_name = %s ORDER BY created_at DESC"
+        """Return enterprise bank accounts scoped to the active business name with computed current_balance."""
+        query = """
+            SELECT b.*,
+                   COALESCE(b.opening_balance, 0)
+                   + COALESCE((SELECT SUM(amount) FROM ent_revenue r WHERE r.bank_account_id = b.id), 0)
+                   - COALESCE((SELECT SUM(amount) FROM ent_expenses e WHERE e.bank_account_id = b.id), 0)
+                   AS current_balance
+            FROM enterprise_bank_accounts b
+            WHERE b.user_id = %s AND b.business_name = %s 
+            ORDER BY b.created_at DESC
+        """
         return self._execute_query(query, (user_id, org_name))
+
 
     def provision_business_org(self, user_id: str, business_name: str) -> Optional[str]:
         """Idempotently create a dedicated org for this business and enroll the user. Returns org_id."""
