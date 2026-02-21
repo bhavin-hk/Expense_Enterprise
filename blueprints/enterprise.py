@@ -71,13 +71,19 @@ def enterprise_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ── Business Authentication (Double Login) ──────────────────────────────────
+import base64
 @enterprise_bp.route('/check_auth')
 def check_auth():
     """JSON API: Returns if the business has a PIN registered for this user."""
     if 'user' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-    business_name = request.args.get('bname', '')
+    
+    encoded_bname = request.args.get('bname', '')
+    try:
+        business_name = base64.b64decode(encoded_bname).decode('utf-8')
+    except Exception:
+        business_name = encoded_bname # Fallback if not base64 encoded
+
     try:
         res = _svc().db.table('ent_members') \
             .select('pin_hash, ent_organizations!inner(name)') \

@@ -429,8 +429,11 @@
         togglePinReset(false); // Ensure we start in normal mode
 
         try {
+            // Encode safely for URL passing without Vercel breaking query params
+            const encodedName = btoa(unescape(encodeURIComponent(businessName)));
+
             // Check if user has a PIN registered for this business
-            const response = await fetch(`/enterprise/check_auth?bname=${encodeURIComponent(businessName)}`);
+            const response = await fetch(`/enterprise/check_auth?bname=${encodedName}`);
             const data = await response.json();
 
             authLoader.style.display = "none";
