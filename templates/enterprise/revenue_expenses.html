@@ -148,8 +148,8 @@
 
             <div class="form-group" id="categoryGroup">
                 <label>Category</label>
-                <select name="category" class="input-select full-width">
-                    {% for cat in categories %}
+                <select name="category" id="transaction-category" class="input-select full-width">
+                    {% for cat in expense_categories %}
                     <option value="{{ cat }}">{{ cat }}</option>
                     {% endfor %}
                 </select>
@@ -213,6 +213,37 @@
     function closeModal(id) {
         document.getElementById(id).classList.remove('active');
     }
+
+    const incomeCategories = {{ income_categories|tojson|safe }};
+    const expenseCategories = {{ expense_categories|tojson|safe }};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const typeRadios = document.querySelectorAll('input[name="type"]');
+        const categorySelect = document.getElementById('transaction-category');
+
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const isIncome = e.target.value === 'Income';
+                const categories = isIncome ? incomeCategories : expenseCategories;
+                
+                if (categorySelect) {
+                    categorySelect.innerHTML = '';
+                    categories.forEach(cat => {
+                        const option = document.createElement('option');
+                        option.value = cat;
+                        option.textContent = cat;
+                        categorySelect.appendChild(option);
+                    });
+                }
+            });
+        });
+
+        // Trigger change on load if needed
+        const checkedRadio = document.querySelector('input[name="type"]:checked');
+        if (checkedRadio) {
+            checkedRadio.dispatchEvent(new Event('change'));
+        }
+    });
 
 
     // Auto-set today's date if not passed

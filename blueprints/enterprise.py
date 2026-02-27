@@ -551,7 +551,9 @@ def revenue_expenses():
 
         active_biz      = session.get('active_business', '')
         enterprise_banks = svc.get_banks_for_org(session['user'], active_biz)
-        categories       = svc.get_categories(session['user'])
+        categories_split = svc.get_split_categories(session['user'])
+        income_categories = categories_split['income']
+        expense_categories = categories_split['expense']
 
         ledger = sorted(
             [{**r, 'type': 'Income'} for r in revenue] +
@@ -576,7 +578,9 @@ def revenue_expenses():
                            total_expenses=total_expenses, period=period,
                            start_date=start_date, end_date=end_date,
                            enterprise_banks=enterprise_banks,
-                           categories=categories, org_members=org_members,
+                           income_categories=income_categories,
+                           expense_categories=expense_categories,
+                           org_members=org_members,
                            firms_list=firms_list, currency='₹')
 
 # ── Add Transaction ───────────────────────────────────────────────────────────

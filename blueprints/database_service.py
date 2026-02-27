@@ -53,6 +53,7 @@ class BaseService:
     def update_enterprise_bank(self, user_id: str, bank_id: str, data: Dict[str, Any]) -> bool: raise NotImplementedError
     def delete_enterprise_bank(self, user_id: str, bank_id: str) -> bool: raise NotImplementedError
     def get_categories(self, user_id: str) -> List[str]: raise NotImplementedError
+    def get_split_categories(self, user_id: str) -> dict: raise NotImplementedError
     def get_holding_payments(self, org_id: str, start_date: str = None, end_date: str = None, hold_type: str = None, handled_by: str = None, firm: str = None, status: str = None) -> List[Dict[str, Any]]: raise NotImplementedError
     def add_holding_payment(self, org_id: str, user_id: str, data: dict) -> bool: raise NotImplementedError
     def settle_holding_payment(self, txn_id: str, org_id: str, settle_type: str, part_amount: float = 0) -> dict: raise NotImplementedError
@@ -838,6 +839,27 @@ class SupabaseService(BaseService):
             return DEFAULT_CATEGORIES + [r['name'] for r in res.data]
         except Exception:
             return DEFAULT_CATEGORIES
+
+    def get_split_categories(self, user_id: str) -> dict:
+        DEFAULT_EXPENSE_CATEGORIES = [
+            'Food', 'Transport', 'Utilities', 'Entertainment', 'Shopping',
+            'Health', 'Travel', 'Education', 'Other'
+        ]
+        DEFAULT_INCOME_CATEGORIES = [
+            'Salary', 'Freelance', 'Investment', 'Business', 'Rental', 'Other'
+        ]
+        try:
+            res = self.db.table('user_categories').select('name, type').eq('user_id', user_id).execute()
+            income = DEFAULT_INCOME_CATEGORIES.copy()
+            expense = DEFAULT_EXPENSE_CATEGORIES.copy()
+            for r in res.data:
+                if r.get('type') == 'income':
+                    income.append(r['name'])
+                else:
+                    expense.append(r['name'])
+            return {'income': income, 'expense': expense}
+        except Exception:
+            return {'income': DEFAULT_INCOME_CATEGORIES.copy(), 'expense': DEFAULT_EXPENSE_CATEGORIES.copy()}
 
     # ── Personal Transactions (Pocket Expense reports) ────────────────────────
     def get_personal_transactions(self, user_id: str, filters: dict) -> List[Dict[str, Any]]:
